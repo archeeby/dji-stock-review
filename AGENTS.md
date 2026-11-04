@@ -37,7 +37,7 @@ Read relevant implementation and tests before changing behavior; this map is not
 2. For nontrivial changes, briefly state a plan and identify data-loss or regression risks.
 3. Keep the change minimal and focused. Avoid unrelated refactoring and new dependencies without justification.
 4. Add or update tests for changed behavior, especially candidate isolation, undo, trimming, and export deletion.
-5. Run the relevant tests; use `python -m pytest` when pytest is available. Report exactly what ran and any failures or environment limitations.
+5. Run the relevant tests; use `python -m unittest discover -s tests -t . -v` for the existing unittest suite. Report exactly what ran and any failures or environment limitations.
 6. Review the diff for accidental changes, secrets, generated files, and destructive behavior.
 7. Deliver a concise summary, test evidence, and any unresolved risks. Prefer a feature branch and pull request; do not merge to `main` without human approval.
 
