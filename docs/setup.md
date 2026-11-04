@@ -87,7 +87,7 @@ The UI requires generated candidate metadata. GPS reverse-geocoding may make net
 ## 5. Tests
 
 ```bash
-python -m unittest discover -s tests -t . -v
+python -m unittest discover -s tests -v
 ```
 
 The test suite uses Python's standard-library `unittest`; this command has **not been executed** as part of the documentation change. Check the actual test suite and dependencies before treating a passing run as proof of full pipeline support.
