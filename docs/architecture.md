@@ -43,7 +43,7 @@ Runtime data lives in `~/DroneStock/originals`, `metadata`, and `exports`; these
 
 ## Dependencies observed
 
-- Python: `streamlit`, `cv2` (OpenCV), `numpy`; other modules may require additional dependencies pending complete packaging audit.
+- Python: `streamlit`, `cv2` (OpenCV), `numpy`; all tracked Python imports were audited; the project declares these in `pyproject.toml` (version ranges, not a lockfile).
 - CLI: `ffmpeg`, `exiftool`.
 - Local service: Ollama with `qwen3-vl:4b` and `qwen3:4b`.
 - External service: OpenStreetMap Nominatim for uncached location resolution.
@@ -52,7 +52,7 @@ Runtime data lives in `~/DroneStock/originals`, `metadata`, and `exports`; these
 
 1. Multiple scripts hardcode `Path.home() / "DroneStock"` rather than deriving a configurable project/data root.
 2. `run_batch.py` uses macOS-specific `sysctl kern.thermal_pressure` and `memory_pressure` checks. Their failures are handled, but Ubuntu has no equivalent monitoring and logs may misleadingly imply a health check occurred.
-3. No `requirements.txt`, `pyproject.toml`, or pinned model digests were found in the audited entry points; dependency installation and versions require validation.
+3. A `pyproject.toml` now declares the three external Python dependencies, but versions are not locked and model digests are not pinned. Installation still needs validation.
 4. The Ollama endpoint and model tags are hardcoded.
 5. The full pipeline requires real or representative video, sufficient RAM/storage, and local Ollama models. Automated integration tests are not established.
 6. Ubuntu support and cross-platform CI are planned, not yet proven.
@@ -60,7 +60,7 @@ Runtime data lives in `~/DroneStock/originals`, `metadata`, and `exports`; these
 ## Cross-platform implementation plan
 
 - Centralize project/data root and Ollama endpoint in configuration; preserve existing defaults.
-- Add pinned Python dependencies and an installable/testable development setup.
+- Validate and lock Python dependencies and the new installable development setup.
 - Separate optional health monitoring from batch processing, with macOS and Linux implementations or explicit opt-out.
 - Add lightweight fixture-based unit tests and GitHub Actions on Ubuntu and macOS; avoid downloading model weights in ordinary CI.
 - Add opt-in end-to-end smoke tests using a small permitted sample clip and locally installed Ollama models.
