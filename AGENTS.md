@@ -33,6 +33,8 @@ Read relevant implementation and tests before changing behavior; this map is not
 - Preserve preview stability and existing Streamlit interaction semantics when changing UI behavior.
 
 ## Collaborative task discovery and architecture-first workflow
+Follow `docs/development-workflow.md` for the Issue → design/implementation plan → PR process. The proposed test-coverage work is documented as a **draft** in `docs/design/baseline-test-coverage.md`; implementation requires design approval.
+
 The human owner may describe tasks conversationally or by voice. A spoken request is the **start of discovery**, not automatic authorization to implement.
 
 1. **Discuss the problem first.** The planning assistant clarifies the goal, user-visible behavior, constraints, edge cases, and success criteria. Ask focused questions rather than turning an incomplete request directly into code.
