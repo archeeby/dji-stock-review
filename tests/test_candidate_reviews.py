@@ -257,7 +257,7 @@ class CandidateReviewTests(unittest.TestCase):
                     self.assertEqual(self.path.read_bytes(), before)
                     self.click(app, '▶')
                     self.assertEqual(self.path.read_bytes(), before)
-                    self.assertEqual(app.session_state.filtered_state.get('decision_history', []), [])
+                    self.assertEqual(app.session_state.get('decision_history', []), [])
                     self.assertEqual(next(s for s in app.selectbox if s.label == 'Status').value, filter_name)
 
     def test_both_decisions_save_current_boundaries_and_all_metadata(self):
