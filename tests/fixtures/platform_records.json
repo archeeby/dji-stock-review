@@ -1,0 +1,28 @@
+{
+  "valid": {
+    "filename": "sample_coast_001.mp4",
+    "review": {
+      "status": "approved",
+      "title": "Aerial View of Coastal Landscape",
+      "description": "Drone footage of a scenic coastline with blue sea, mountains and natural landscape.",
+      "keywords": "coast, sea, ocean, aerial, drone, mountains, landscape, nature, travel, water",
+      "start": 0.0,
+      "end": 15.0
+    },
+    "created": "2025-06-15",
+    "location": {}
+  },
+  "insufficient_keywords": {
+    "filename": "sample_short_keywords.mp4",
+    "review": {
+      "status": "approved",
+      "title": "Aerial Coastal View",
+      "description": "Aerial footage of a coastline.",
+      "keywords": "coast, sea, drone",
+      "start": 0.0,
+      "end": 15.0
+    },
+    "created": "2025-06-15",
+    "location": {}
+  }
+}

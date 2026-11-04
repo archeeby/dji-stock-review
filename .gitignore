@@ -1,0 +1,47 @@
+# Local Python environment and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Local archives and historical source backups
+/archive/
+/backups/
+*.bak
+*.bak-*
+*.backup
+*.py.before_*
+*.py.broken-*
+
+# Runtime logs and temporary output
+*.log
+*.tmp
+*.partial.mp4
+.DS_Store
+
+# Local video library and generated data
+/originals/
+/metadata/
+/exports/
+*.mp4
+*.MP4
+*.mov
+*.MOV
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Generated assets and stock platform data
+/covers/
+/previews/
+/platforms/*/upload/
+/platforms/*/*.csv
+/drone_metadata_analysis.zip
