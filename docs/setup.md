@@ -42,10 +42,10 @@ python -m pip install --upgrade pip
 **Dependency packaging is incomplete:** the repository currently has no verified dependency manifest. The audited pipeline imports `streamlit`, `cv2` and `numpy`. A provisional, **unpinned** install for exploration is:
 
 ```bash
-python -m pip install streamlit opencv-python numpy pytest
+python -m pip install -e .
 ```
 
-Other scripts may require more packages; the next task is to audit all imports and add a locked dependency manifest. Do not treat the provisional command as a reproducible installation.
+All tracked Python imports have been audited; a lockfile and clean-machine installation verification are still pending.
 
 ## 3. Ollama (required for full AI processing)
 
@@ -87,10 +87,10 @@ The UI requires generated candidate metadata. GPS reverse-geocoding may make net
 ## 5. Tests
 
 ```bash
-python -m pytest
+python -m unittest discover -s tests -t . -v
 ```
 
-This command has **not been executed** as part of the documentation change. Check the actual test suite and dependencies before treating a passing run as proof of full pipeline support.
+The test suite uses Python's standard-library `unittest`; this command has **not been executed** as part of the documentation change. Check the actual test suite and dependencies before treating a passing run as proof of full pipeline support.
 
 ## 6. Ubuntu caveats and next steps
 
