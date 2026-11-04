@@ -4,12 +4,12 @@
 
 ## 1. System prerequisites
 
-Install Git, Python 3 with `venv` and `pip`, FFmpeg, and ExifTool.
+Install Git, **Python 3.12** with `venv` and `pip`, FFmpeg, and ExifTool. Python 3.12 is the recommended local development version; CI also tests 3.11. Python 3.15 is not currently verified for this project.
 
 macOS with Homebrew:
 
 ```bash
-brew install python ffmpeg exiftool
+brew install python@3.12 ffmpeg exiftool
 ```
 
 Ubuntu:
@@ -22,7 +22,7 @@ sudo apt install -y git python3 python3-venv python3-pip ffmpeg libimage-exiftoo
 Check availability:
 
 ```bash
-python3 --version
+/opt/homebrew/bin/python3.12 --version
 ffmpeg -version
 exiftool -ver
 ```
@@ -34,18 +34,25 @@ The application currently assumes `~/DroneStock`. Clone there until configurable
 ```bash
 git clone git@github.com:archeeby/dji-stock-review.git ~/DroneStock
 cd ~/DroneStock
-python3 -m venv .venv
+/opt/homebrew/bin/python3.12 -m venv .venv
 source .venv/bin/activate
+python --version  # expect Python 3.12.x
 python -m pip install --upgrade pip
 ```
 
-**Dependency packaging is incomplete:** the repository currently has no verified dependency manifest. The audited pipeline imports `streamlit`, `cv2` and `numpy`. A provisional, **unpinned** install for exploration is:
+The project has a `pyproject.toml` declaring `streamlit`, `opencv-python` and `numpy`, but dependency versions are not locked and a clean-machine installation is not yet verified. Install with:
 
 ```bash
 python -m pip install -e .
 ```
 
-All tracked Python imports have been audited; a lockfile and clean-machine installation verification are still pending.
+Check the active interpreter and OpenCV before running media tests:
+
+```bash
+python -c 'import sys, cv2, numpy; print(sys.version); print("OpenCV:", cv2.__version__)'
+```
+
+If `.venv` was created with the wrong interpreter, deactivate it and recreate it **only after confirming it contains no personal files**. Do not delete project data or originals.
 
 ## 3. Ollama (required for full AI processing)
 
@@ -90,7 +97,14 @@ The UI requires generated candidate metadata. GPS reverse-geocoding may make net
 python -m unittest discover -s tests -v
 ```
 
-The test suite uses Python's standard-library `unittest`; this command has **not been executed** as part of the documentation change. Check the actual test suite and dependencies before treating a passing run as proof of full pipeline support.
+The test suite uses Python's standard-library `unittest`. A passing unit suite is not proof of full video pipeline support. For the opt-in real DJI motion integration test on the test branch (production 5-second minimum), run:
+
+```bash
+DJI_TEST_VIDEO="$HOME/DroneStock/originals/354022_DJI_0408.MP4" \
+  python -m unittest tests.test_real_dji_motion -v
+```
+
+The real-video test is skipped when `DJI_TEST_VIDEO` is unset. Never commit the original video or GPS data without explicit approval. The real-video integration test has not yet been verified on the user's Mac.
 
 ## 6. Ubuntu caveats and next steps
 
