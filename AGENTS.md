@@ -47,3 +47,10 @@ Read relevant implementation and tests before changing behavior; this map is not
 - **Human owner**: decides whether to merge and authorizes any destructive or irreversible action.
 
 AI review is advisory; tests and explicit human approval remain required. Do not claim tests passed unless they actually ran.
+
+## Project onboarding and portability
+- Read `README.md`, `docs/architecture.md`, and `docs/setup.md` before changing pipeline, model, dependency, or deployment behavior.
+- The full pipeline uses Ollama `qwen3-vl:4b` for middle-frame vision analysis and `qwen3:4b` for stock metadata. Motion and composition use OpenCV/NumPy heuristics; GPS comes from ExifTool and optional Nominatim reverse geocoding.
+- macOS ARM64 is the primary development environment. Ubuntu x86_64 is a **target**, not yet verified. Do not claim portability without testing.
+- Prioritize configurable project/data paths, cross-platform resource monitoring, pinned dependencies, CI on both operating systems, and small non-destructive integration fixtures.
+- Do not assume the agent's cloud environment has access to original videos, Ollama models, or a running Ollama server.
