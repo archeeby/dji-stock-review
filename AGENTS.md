@@ -47,6 +47,16 @@ The human owner may describe tasks conversationally or by voice. A spoken reques
 
 **Roles:** The planning assistant acts as technical discussion partner and coordinates design and review; the implementer writes code; an independent agent reviews; the human owner approves significant plans and merges. Voice is an input method, not a shortcut around design or human approval.
 
+## Test integrity and failure triage
+Tests exist to verify **real, agreed user behavior**, not to make CI green. Never weaken, delete, skip, rewrite assertions, alter fixtures, or increase mocks solely to make a failing test pass.
+
+- Derive tests from explicit user journeys, requirements, regressions, and realistic edge cases. Unit tests and synthetic fixtures are useful for deterministic logic, but they do not replace representative real-media integration and end-to-end tests where actual FFmpeg, ExifTool, OpenCV, Ollama models, and filesystem behavior matter. Label mocked tests clearly and never present them as proof that the full pipeline works.
+- Prefer small, legally usable, representative MP4 fixtures and real tool invocations for integration coverage; keep private originals and generated data out of Git. External services and large AI models may require a separate opt-in/local or dedicated-runner workflow. Document test coverage gaps honestly.
+- On any failure, **investigate before changing anything**: reproduce it, inspect the error and relevant diff, identify the expected use case, and determine whether the failure reflects a product regression, an intentional behavior change, an invalid or brittle test, an environment/dependency issue, or a flaky test.
+- Explain what broke, its user impact, and the viable fixes. If the intended behavior changed, update the specification and test **only after agreement**; if the existing use case remains valid, fix the production code. If the test itself is incorrect, fix it while preserving meaningful assertions. For significant or ambiguous failures, discuss the diagnosis and options with the human owner before choosing a fix.
+- Do not silently change a test to match current implementation, mask failures with mocks, suppress exceptions, or bypass CI. Every test change accompanying a failure must include a rationale tied to expected behavior and evidence that the corrected test still detects the regression.
+- Rerun affected tests and relevant regression suites after the fix. Report which cases passed, what was mocked, what was tested with real tools/media/models, and any unverified scenarios.
+
 ## Working agreement
 1. Read the task, acceptance criteria, and affected code before editing.
 2. For nontrivial changes, briefly state a plan and identify data-loss or regression risks.
