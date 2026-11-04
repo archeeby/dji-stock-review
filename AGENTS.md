@@ -32,6 +32,21 @@ Read relevant implementation and tests before changing behavior; this map is not
 - Clip trim validation must enforce the project's minimum duration (currently 5 seconds); use existing validation helpers instead of duplicating rules.
 - Preserve preview stability and existing Streamlit interaction semantics when changing UI behavior.
 
+## Collaborative task discovery and architecture-first workflow
+The human owner may describe tasks conversationally or by voice. A spoken request is the **start of discovery**, not automatic authorization to implement.
+
+1. **Discuss the problem first.** The planning assistant clarifies the goal, user-visible behavior, constraints, edge cases, and success criteria. Ask focused questions rather than turning an incomplete request directly into code.
+2. **Inspect the existing system.** For changes beyond a trivial fix, review the relevant code, tests, data flow, module boundaries, dependencies, and established patterns before proposing a solution. Distinguish verified facts about the repository from assumptions.
+3. **Design proportionately.** For a small, low-risk change, use a short implementation plan. For complex, architectural, cross-module, data-sensitive, or high-risk work, discuss options, trade-offs, compatibility, failure handling, performance, security, test strategy, and best practices. Explicitly identify the modules and interfaces expected to change.
+4. **Agree on a plan before coding.** Present the recommended approach, alternatives where meaningful, ordered implementation steps, acceptance criteria, validation strategy, and outstanding risks. For complex changes, **obtain explicit human approval of the implementation plan** before delegating or editing code. Record substantial decisions as a concise RFC under `docs/design/` when useful; avoid unnecessary documentation for simple fixes.
+5. **Delegate a bounded task.** After approval, create or update a GitHub Issue (when available) containing the agreed scope, technical decisions, acceptance criteria, test expectations, and non-goals. The implementer works on a feature branch and opens a pull request. Do not treat a draft plan or issue as permission to start implementation when approval is required.
+6. **Validate and independently review.** Run appropriate automated tests and CI; add integration or end-to-end tests when the change warrants them. An independent reviewer checks the diff against the agreed plan, architecture, correctness, security, data safety, and regressions. Report which checks were real versus mocked and which environments were not tested.
+7. **Resolve feedback, then request merge approval.** Address review and CI findings, repeat validation, summarize results and residual risks, and leave the final merge decision to the human owner.
+
+**Change control:** An implementer must not silently diverge from an approved architecture or expand the scope. If implementation reveals a material design problem, stop, document the finding and options, and return to the planning discussion for a decision. Routine implementation details within the approved scope do not require repeated approval.
+
+**Roles:** The planning assistant acts as technical discussion partner and coordinates design and review; the implementer writes code; an independent agent reviews; the human owner approves significant plans and merges. Voice is an input method, not a shortcut around design or human approval.
+
 ## Working agreement
 1. Read the task, acceptance criteria, and affected code before editing.
 2. For nontrivial changes, briefly state a plan and identify data-loss or regression risks.
