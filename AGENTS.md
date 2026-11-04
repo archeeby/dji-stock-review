@@ -73,6 +73,10 @@ Tests exist to verify **real, agreed user behavior**, not to make CI green. Neve
 
 AI review is advisory; tests and explicit human approval remain required. Do not claim tests passed unless they actually ran.
 
+## Engineering standards
+- Read and follow `docs/development-guidelines.md` for new and materially changed code. Treat existing deviations as technical debt to address through approved, behavior-preserving refactoring, not as permission to broaden an unrelated task.
+- Establish meaningful behavior and real-video integration coverage before substantial refactoring; do not confuse mocked tests with full pipeline validation.
+
 ## Project onboarding and portability
 - Read `README.md`, `docs/architecture.md`, and `docs/setup.md` before changing pipeline, model, dependency, or deployment behavior.
 - The full pipeline uses Ollama `qwen3-vl:4b` for middle-frame vision analysis and `qwen3:4b` for stock metadata. Motion and composition use OpenCV/NumPy heuristics; GPS comes from ExifTool and optional Nominatim reverse geocoding.
