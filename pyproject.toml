@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dji-stock-review"
+version = "0.1.0"
+description = "Local-first DJI stock-footage analysis and review pipeline"
+requires-python = ">=3.11"
+dependencies = [
+  "streamlit>=1.35,<2",
+  "numpy>=1.26,<3",
+  "opencv-python>=4.8,<5",
+]
+
+[tool.setuptools]
+py-modules = [
+  "analyze_auto_single_frame_batch",
+  "analyze_camera_motion_batch",
+  "analyze_composition_batch",
+  "candidate_reviews",
+  "detect_scenes_v4_batch",
+  "export_approved",
+  "export_stock_platforms",
+  "generate_stock_metadata_batch",
+  "library_stats",
+  "metadata_enrichment",
+  "progress_monitor",
+  "resolve_location",
+  "review_app",
+  "review_navigation",
+  "run_batch",
+  "run_pipeline",
+  "trim_bounds",
+]
+
+[tool.setuptools.packages.find]
+include = ["stock*"]
+exclude = ["tests*"]
