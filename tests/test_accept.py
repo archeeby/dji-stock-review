@@ -64,5 +64,49 @@ class AcceptanceProfileTests(unittest.TestCase):
                     accept.prerequisites("ai", folder)
 
 
+    def test_ollama_result_requires_real_success(self):
+        output = ("test_real_frame_vision_and_stock_metadata (tests.test_ollama_e2e.RealOllamaE2E.test_real_frame_vision_and_stock_metadata) ... ok\\n"
+                  "----------------------------------------------------------------------\\nRan 1 test in 8.12s\\n\\nOK\\n")
+        accept.verify_ollama_result(output, 0)
+
+    def test_skipped_ollama_is_rejected_even_with_exit_zero(self):
+        output = ("setUpClass (tests.test_ollama_e2e.RealOllamaE2E) ... skipped 'opt-in'\\n"
+                  "----------------------------------------------------------------------\\nRan 0 tests in 0.000s\\n\\nOK (skipped=1)\\n")
+        with self.assertRaises(RuntimeError):
+            accept.verify_ollama_result(output, 0)
+
+    def test_empty_ollama_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            accept.verify_ollama_result("Ran 0 tests in 0.00s\\nOK", 0)
+
+    def test_failed_ollama_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            accept.verify_ollama_result("test_real_frame_vision_and_stock_metadata ... ok\\nRan 1 test in 1.0s\\nOK", 1)
+
+    def test_missing_ollama_models_are_rejected(self):
+        from tests.test_ollama_e2e import RealOllamaE2E
+        import io
+        import json
+        with patch.dict("os.environ", {"DJI_RUN_OLLAMA_E2E": "1"}):
+            with patch("urllib.request.urlopen") as urlopen:
+                urlopen.return_value.__enter__.return_value = io.BytesIO(json.dumps({"models": []}).encode())
+                with self.assertRaisesRegex(RuntimeError, "Required Ollama models missing"):
+                    RealOllamaE2E.setUpClass()
+
+    def test_preview_script_enforces_expected_sha(self):
+        script = (MODULE.parent / "preview.sh").read_text()
+        self.assertIn('DJI_EXPECTED_PR_SHA', script)
+        self.assertIn('Refusing preview', script)
+
+    def test_accept_passes_expected_sha_to_preview(self):
+        script = MODULE.read_text()
+        self.assertIn('preview_env["DJI_EXPECTED_PR_SHA"] = sha', script)
+
+    def test_profile_override_cannot_downgrade(self):
+        # The runner must reject weaker profiles rather than silently skipping tests.
+        script = MODULE.read_text()
+        self.assertIn('order[override] < order[profile]', script)
+
+
 if __name__ == "__main__":
     unittest.main()
