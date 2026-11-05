@@ -14,9 +14,9 @@ if (( port > 65535 )); then
   exit 2
 fi
 
-repo="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-if [[ "$repo" != "$HOME/DroneStock" ]]; then
-  echo "This project currently requires its main checkout at ~/DroneStock (hardcoded application data root)." >&2
+repo="$HOME/DroneStock"
+if [[ ! -d "$repo/.git" ]]; then
+  echo "Main checkout not found at ~/DroneStock (required by hardcoded application data paths)." >&2
   exit 1
 fi
 
