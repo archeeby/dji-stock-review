@@ -8,7 +8,7 @@ This document distinguishes tests that **exist today** from planned checks. It a
 | --- | --- | --- | --- | --- |
 | **Unit / component** | Domain logic, state, validation, adapters, and isolated UI behavior; mocks/synthetic inputs where appropriate | Python 3.12, `pip install -e .` | Local and hosted GitHub Actions | Automated under `tests/` |
 | **Lightweight real-tool integration** | Actual original DJI MP4 → OpenCV motion/composition analysis → deterministic clip candidates; SHA-256 and clip constraints | Same Python dependencies, checked-in MP4; **no Ollama** | Local and hosted GitHub Actions | Automated in `tests/test_real_dji_motion.py` |
-| **Heavy AI / end-to-end** | Actual Ollama vision analysis and stock metadata; ultimately review, export, playable media and metadata verification | Python, OpenCV, Ollama server, `qwen3-vl:4b`, `qwen3:4b`; FFmpeg/ExifTool for full pipeline and GPS; network for uncached geocoding | Local controlled environment only | **Manual AI pipeline smoke test available; full automated E2E does not yet exist** |
+| **Heavy AI / end-to-end** | Actual Ollama vision analysis and stock metadata; ultimately review, export, playable media and metadata verification | Python, OpenCV, Ollama server, `qwen3-vl:4b`, `qwen3:4b`; FFmpeg/ExifTool for full pipeline and GPS; network for uncached geocoding | Local controlled environment only | **Opt-in automated Ollama vision + metadata contract test exists (`tests/test_ollama_e2e.py`); full export E2E remains unimplemented** |
 
 The word *integration* does not imply AI. The current video integration test exercises real OpenCV and deterministic scripts, not Ollama.
 
@@ -78,7 +78,7 @@ Workflow: `.github/workflows/tests.yml`.
 - **No** Ollama installation, model download, AI inference or full export E2E is configured.
 - A local passing run is not proof of CI success: inspect the actual checks in the pull request, including macOS and Ubuntu results.
 
-## Heavy AI pipeline: manual local smoke test (not automated E2E)
+## Heavy AI pipeline: automated opt-in contract test and manual smoke test
 
 Additional prerequisites:
 
@@ -105,9 +105,9 @@ python run_pipeline.py originals/ai-smoke/354022_DJI_0408.MP4 --location "Unknow
 
 Manual smoke-test acceptance checks: successful process exit; candidate JSON and AI JSON generated for each candidate; stock metadata JSON with title and keywords; source file SHA-256 unchanged. This does **not** establish AI content quality, export correctness, or full end-to-end coverage. Model outputs may vary; validate contracts and quality constraints, not exact generated prose.
 
-## What a future automated heavy E2E must add
+## What a future full-pipeline heavy E2E must add
 
-An explicit, separately approved test harness should isolate its input/output directories, avoid personal footage and existing metadata, verify both Ollama models are ready, invoke the pipeline, validate structured AI results, then exercise the approved export path and verify the resulting MP4 with FFprobe (duration, codec, playback) and stock metadata contracts. Make cleanup safe and restricted to test-owned files. Because current code hardcodes `~/DroneStock`, isolation requires a design/code change before declaring this a safe automated E2E.
+The opt-in `tests/test_ollama_e2e.py` already validates real Ollama vision and stock metadata contracts with temporary paths. A future full-pipeline E2E must additionally exercise the complete pipeline, approved export path, and resulting MP4 with FFprobe (duration, codec, playback) and stock metadata contracts. Make cleanup safe and restricted to test-owned files. Because current code hardcodes `~/DroneStock`, isolation requires a design/code change before declaring this a safe automated E2E.
 
 Do not enable heavy AI E2E on ordinary hosted PR CI or silently download multi-GB models. A future manually triggered/self-hosted runner must be isolated from personal data and must not execute untrusted pull-request code.
 
