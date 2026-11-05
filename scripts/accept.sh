@@ -6,9 +6,10 @@ if [[ $# -ne 1 || ! "$1" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 repo="$HOME/DroneStock"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 for python in "$repo/.venv312/bin/python" "$repo/.venv/bin/python"; do
   if [[ -x "$python" ]]; then
-    exec "$python" "$repo/scripts/accept.py" "$1"
+    exec "$python" "$script_dir/accept.py" "$1"
   fi
 done
 echo "Python virtualenv not found under ~/DroneStock" >&2
