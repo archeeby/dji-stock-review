@@ -65,23 +65,27 @@ class AcceptanceProfileTests(unittest.TestCase):
 
 
     def test_ollama_result_requires_real_success(self):
-        output = ("test_real_frame_vision_and_stock_metadata (tests.test_ollama_e2e.RealOllamaE2E.test_real_frame_vision_and_stock_metadata) ... ok\n"
-                  "----------------------------------------------------------------------\nRan 1 test in 8.12s\n\nOK\n")
-        accept.verify_ollama_result(output, 0)
+        data = {"successful": True, "total": 1, "failed": 0, "skipped": 0,
+                "tests": [{"id": "tests.test_ollama_e2e.RealOllamaE2E.test_real_frame_vision_and_stock_metadata",
+                           "status": "passed"}]}
+        accept.verify_ollama_result(data, 0)
 
     def test_skipped_ollama_is_rejected_even_with_exit_zero(self):
-        output = ("setUpClass (tests.test_ollama_e2e.RealOllamaE2E) ... skipped 'opt-in'\n"
-                  "----------------------------------------------------------------------\nRan 0 tests in 0.000s\n\nOK (skipped=1)\n")
+        data = {"successful": True, "total": 0, "failed": 0, "skipped": 1, "tests": []}
         with self.assertRaises(RuntimeError):
-            accept.verify_ollama_result(output, 0)
+            accept.verify_ollama_result(data, 0)
 
     def test_empty_ollama_is_rejected(self):
         with self.assertRaises(RuntimeError):
-            accept.verify_ollama_result("Ran 0 tests in 0.00s\\nOK", 0)
+            accept.verify_ollama_result({"successful": True, "total": 0,
+                                         "failed": 0, "skipped": 0, "tests": []}, 0)
 
     def test_failed_ollama_is_rejected(self):
+        data = {"successful": False, "total": 1, "failed": 1, "skipped": 0,
+                "tests": [{"id": "tests.test_ollama_e2e.RealOllamaE2E.test_real_frame_vision_and_stock_metadata",
+                           "status": "failed"}]}
         with self.assertRaises(RuntimeError):
-            accept.verify_ollama_result("test_real_frame_vision_and_stock_metadata ... ok\\nRan 1 test in 1.0s\\nOK", 1)
+            accept.verify_ollama_result(data, 1)
 
     def test_missing_ollama_models_are_rejected(self):
         from tests.test_ollama_e2e import RealOllamaE2E
