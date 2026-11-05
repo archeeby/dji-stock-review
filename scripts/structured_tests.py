@@ -72,7 +72,7 @@ def exclude_separate_ollama(suite):
             child = exclude_separate_ollama(item)
             if child.countTestCases():
                 filtered.addTest(child)
-        elif item.id() != "tests.test_ollama_e2e.RealOllamaE2E.test_real_frame_vision_and_stock_metadata":
+        elif not item.id().endswith("test_ollama_e2e.RealOllamaE2E.test_real_frame_vision_and_stock_metadata"):
             filtered.addTest(item)
     return filtered
 
