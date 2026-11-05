@@ -100,13 +100,19 @@ def prerequisites(profile, worktree):
 def execute(pr, repo):
     sha, worktree, changed = prepare_worktree(repo, pr)
     profile = classify(changed)
+    override = os.environ.get("DJI_ACCEPT_PROFILE")
+    order = {"docs": 0, "unit": 1, "media": 2, "ai": 3}
+    if override:
+        if override not in order or order[override] < order[profile]:
+            raise ValueError(f"Unsafe acceptance profile override: {override!r} (required: {profile})")
+        profile = override
     report_dir = Path.home() / ".dji-stock-acceptance" / f"pr-{pr}" / sha
     report_dir.mkdir(parents=True, exist_ok=True)
     report_path = report_dir / "result.json"
     log_path = report_dir / "tests.log"
     report = {
         "schema_version": 2,
-        "pr": pr, "head_sha": sha, "profile": profile, "changed_files": changed,
+        "pr": pr, "head_sha": sha, "profile": profile, "profile_override": override, "changed_files": changed,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "environment": {"platform": sys.platform, "python": sys.version.split()[0]},
         "local_tests": "pending", "ui_acceptance": "pending",
