@@ -1,33 +1,44 @@
 # Baseline behavior and test coverage
 
-**Status: Draft — discussion and approval required before implementation.**
+**Status: Implemented and accepted — 2026-11-05.** Issue #2; implementation and acceptance in [PR #17](https://github.com/archeeby/dji-stock-review/pull/17), squash-merged into `main` as `e32c0958`.
 
-## Goal
-Before refactoring, establish trustworthy regression coverage for meaningful user journeys from DJI source-video ingestion to stock-platform export. Measure code coverage but prioritize behavior over a numeric 100% target. Do not change production behavior to make tests pass.
+## Goal and scope
 
-## Baseline
-Existing unittest and Streamlit AppTest checks exercise some review and export behavior with temporary files and mocks. Current GitHub-hosted CI tests do not verify real video processing or Ollama inference. Models `qwen3-vl:4b` and `qwen3:4b` may require multi-GB downloads and substantial compute; hosted-runner feasibility is unverified.
+Establish reproducible regression evidence for DJI video processing, AI-assisted metadata, review decisions, export lifecycle and platform metadata. Original video, historic AI output and personal review data must remain untouched by automated tests.
 
-## Phase 1: inventory
-Inspect implementation and tests; create a matrix: real user journey, expected outcome, modules, existing tests, missing tests, fixtures, external dependencies, execution environment and status. Include video discovery and GPS/ExifTool; OpenCV motion/composition and candidate detection; Ollama vision and metadata; review, edit, trim, approve/reject, undo and persistence; FFmpeg export; Adobe/Pond5/Shutterstock adapters; retries, resumes, corrupt inputs and protection of originals/previous analysis.
+## Traceability matrix
 
-## Phase 2: characterization and coverage
-Add missing unit/component tests for expected behavior and edge cases. Use mocks only at explicit external boundaries. Produce per-module coverage metrics and a scenario coverage matrix; report gaps. If observed behavior is questionable, discuss it rather than encoding it as an unquestioned specification.
+| Journey / risk | Evidence in `tests/` | Dependency / execution | Status / limit |
+| --- | --- | --- | --- |
+| DJI original, GPS and metadata extraction | `test_real_dji_tools.py`, `test_real_dji_motion.py` | Checked-in DJI MP4, real ExifTool/OpenCV; local and hosted CI | Automated; fixture checksum protects source |
+| Motion/composition and clip candidates | `test_real_dji_motion.py`, `test_trim_boundary_contracts.py`, `test_trim_duration_controls.py` | Real OpenCV plus deterministic boundary tests | Automated; includes clip constraints |
+| AI frame analysis and stock metadata | `test_ollama_e2e.py` | Real local `qwen3-vl:4b` and `qwen3:4b`; opt-in local only | Real-model E2E passed; nondeterministic wording is not asserted |
+| Review, approval/rejection and persistence | `test_candidate_reviews.py`, `test_records.py`, `test_approved_record_contracts.py`, `test_export_lifecycle_regressions.py` | Isolated filesystem tests; human Streamlit preview | Automated contracts plus manual UI acceptance |
+| Trimming, approved export and media verification | `test_real_dji_tools.py`, `test_export_lifecycle_regressions.py`, `test_ollama_e2e.py` | Real FFmpeg/FFprobe, temporary copied media | Automated, including real-model-to-export path |
+| Interrupted exports, reruns and recovery | `test_interrupted_export_recovery.py`, `test_batch_resume_integration.py`, `test_staging_failures.py` | Controlled fixtures and failure injection | Automated |
+| Stock platform contracts and CLI | `test_platform_adapters.py`, `test_stock_platform_contracts.py`, `test_batch_and_platform_cli.py` | Synthetic/contract tests; no live platform uploads | Automated; external platform upload not validated |
+| Acceptance reporting and SHA-bound preview | `test_accept.py`, `scripts/structured_tests.py`, `scripts/accept.py` | Structured unittest JSON and local Mac preview | Zero unaccounted skips required; preview shares live runtime data |
 
-## Phase 3: real-video integration
-Use small licensed representative MP4 fixtures, including a sanitized DJI/GPS sample where possible. Execute actual FFmpeg, ExifTool and OpenCV in temporary isolated directories. Assert media validity, duration, candidate boundaries, metadata, idempotency, source checksums and expected exports. Verify installation, runtime and resource limits on GitHub-hosted Ubuntu and macOS before making tests required on every PR.
+The matrix identifies representative test modules, **not** a claim that every possible edge case is covered. Live stock-platform upload, human judgement of AI wording and destructive UI actions on personal data are outside automated acceptance.
 
-## Phase 4: real Ollama end-to-end
-Run a representative clip through actual Ollama vision and text models and export, validating schema and stable quality invariants rather than exact nondeterministic wording. Compare a manually triggered GitHub-hosted workflow (model downloads/caching, compute, timeouts) with an isolated self-hosted runner with preinstalled models. Never assume GitHub-hosted capacity is sufficient. A personal Mac runner must not run untrusted PR code or access private footage. Record model version/digest, environment and real results; do not claim E2E success until executed.
+## Verified acceptance evidence
 
-## Acceptance criteria
-- A traceable use-case matrix and honest list of coverage gaps.
-- Deterministic fast tests plus meaningful real-tool integration tests where runner feasibility is proven.
-- Documented, reproducible full-model E2E strategy and actual results once executed.
-- No changes to originals, historical AI analyses or intended product behavior.
-- Test failures receive root-cause analysis and a discussed fix decision, never assertion weakening for green CI.
+- PR #17 tested at exact head SHA `922de7e3a51d21991250f057fd044ebc5c9206c2` on macOS Apple Silicon with profile `ai`.
+- **103 passed, 0 failed, 0 skipped**: 102 unit/real DJI integration tests and one real Ollama + FFmpeg E2E. Real Ollama stage took 48.5 seconds.
+- GitHub Actions Python 3.12 checks passed on **Ubuntu and macOS** for that SHA (workflow run `42029386800`).
+- Human confirmed all five Streamlit UI acceptance checks passed on the same SHA.
+- Acceptance evidence lives locally under `~/.dji-stock-acceptance/pr-17/<sha>/` and includes structured JSON, logs and summary; personal runtime data and models are not committed.
+- PR #17 was squash-merged as `e32c0958ca11b315c3dec7ed5c463809f29fae79`.
 
-## Open decisions
-- Source and licensing of representative video fixture with DJI metadata.
-- Whether full Ollama inference can run on hosted GitHub Actions or requires a dedicated runner.
-- Whether to split implementation into multiple small PRs after inventory.
+## Execution and safety
+
+Run local PR acceptance with `DJI_ACCEPT_PROFILE=ai bash scripts/accept.sh <PR-number>` for an open PR; after merge, see [testing instructions](../testing.md) for direct test commands. The runner executes discovery and the separate real Ollama suite; an unexpected skip or inconsistent structured count blocks acceptance. No heavyweight models are downloaded by GitHub-hosted CI.
+
+Automated tests use temporary directories and copied media; the checked-in original fixture is hash-checked. The Streamlit preview **shares** `~/DroneStock` runtime data, so manual acceptance must not change valuable existing records. Filesystem redirection is not a hardened sandbox.
+
+## Remaining risks and follow-up
+
+- No hosted real-Ollama CI: intentional due to model/runner cost and isolation constraints. Local real-model acceptance is required when AI/pipeline changes.
+- No end-to-end upload to Adobe, Pond5 or Shutterstock; adapters have contract tests, not live marketplace certification.
+- Coverage is behavioral, not a guarantee of 100% statement/branch coverage.
+- Optimize GitHub Actions minute consumption separately; do not reduce required validation silently.
