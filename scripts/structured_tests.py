@@ -7,6 +7,12 @@ import time
 import traceback
 import unittest
 
+# Executing scripts/structured_tests.py sets sys.path[0] to scripts/.
+# Restore repository root so tests can import sibling modules and tests.*.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 
 class StructuredResult(unittest.TextTestResult):
     def __init__(self, *args, **kwargs):
