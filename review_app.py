@@ -16,8 +16,7 @@ st.markdown("""<style>
 /* Laptop-first: retain readable controls while removing Streamlit's default gaps. */
 .block-container {max-width:100% !important;padding:3.6rem 0.85rem 1.2rem !important}
 [data-testid="stVerticalBlock"] {gap:.26rem}
-/* Keep both main columns top-aligned. */
-[data-testid="stHorizontalBlock"] {align-items:flex-start}
+/* Respect each st.columns vertical_alignment setting; do not override all rows. */
 [data-testid="stWidgetLabel"] p {font-size:.75rem}
 .stButton button {min-height:2.05rem;padding:.22rem .6rem}
 .stTextArea textarea {min-height:54px}
