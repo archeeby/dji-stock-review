@@ -33,9 +33,20 @@ class AcceptanceProfileTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             accept.classify([])
 
+    def test_unit_profile_also_requires_real_media_tools(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / "tests").mkdir()
+            (folder / "tests/test_real_dji_tools.py").touch()
+            (folder / "tests/test_real_dji_motion.py").touch()
+            with patch.object(accept.shutil, "which", return_value=None):
+                with self.assertRaisesRegex(RuntimeError, "Missing required tools"):
+                    accept.prerequisites("unit", folder)
+
     def test_missing_media_tests_fail_closed(self):
         with patch.object(accept.shutil, "which", return_value="/usr/bin/tool"):
-            with self.assertRaisesRegex(RuntimeError, "integration tests are not present"):
+            with self.assertRaisesRegex(RuntimeError, "integration test is not present"):
                 accept.prerequisites("media", Path("/does-not-exist"))
 
     def test_missing_ai_e2e_fails_closed(self):
@@ -44,6 +55,7 @@ class AcceptanceProfileTests(unittest.TestCase):
             folder = Path(tmp)
             (folder / "tests").mkdir()
             (folder / "tests/test_real_dji_tools.py").touch()
+            (folder / "tests/test_real_dji_motion.py").touch()
             with patch.object(accept.shutil, "which", return_value="/usr/bin/tool"):
                 with self.assertRaisesRegex(RuntimeError, "Ollama E2E test is not implemented"):
                     accept.prerequisites("ai", folder)
