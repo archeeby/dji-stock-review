@@ -40,6 +40,10 @@ mkdir -p "$preview_root"
 echo "Fetching current head of PR #$pr..."
 git -C "$repo" fetch --no-tags origin "pull/$pr/head"
 sha="$(git -C "$repo" rev-parse --verify FETCH_HEAD^{commit})"
+if [[ -n "${DJI_EXPECTED_PR_SHA:-}" && "$sha" != "$DJI_EXPECTED_PR_SHA" ]]; then
+  echo "PR HEAD changed: expected $DJI_EXPECTED_PR_SHA, got $sha. Refusing preview." >&2
+  exit 1
+fi
 
 if [[ -e "$worktree" ]]; then
   if [[ ! -f "$worktree/.git" ]]; then
