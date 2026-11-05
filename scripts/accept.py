@@ -4,6 +4,7 @@ Usage: python scripts/accept.py PR_NUMBER
 A successful automated test run is NOT human UI approval.
 """
 import argparse
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -162,6 +163,61 @@ def run_visible(args, *, cwd, env, log_path, timeout, label):
     return code
 
 
+
+def summarize_log(path, label):
+    """Count verbose unittest outcomes; keep discovery and E2E disjoint."""
+    rows = []
+    if path.exists():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            match = re.match(r"^(test\\S+ \\(.*?\\)) \\.\\.\\. (ok|FAIL|ERROR|skipped .*|expected failure|unexpected success)$", line)
+            if match:
+                outcome = match.group(2)
+                status = ("passed" if outcome in ("ok", "expected failure")
+                          else "skipped" if outcome.startswith("skipped")
+                          else "failed")
+                rows.append((match.group(1), status))
+    return {
+        "category": label, "total": len(rows),
+        "passed": sum(status == "passed" for _, status in rows),
+        "failed": sum(status == "failed" for _, status in rows),
+        "skipped": sum(status == "skipped" for _, status in rows),
+        "failed_tests": [name for name, status in rows if status == "failed"],
+    }
+
+
+def print_summary(report, report_dir, failure=None):
+    categories = []
+    for filename, label in (("tests.log", "Unit & DJI integration"),
+                            ("ollama-e2e.log", "Real Ollama E2E")):
+        path = report_dir / filename
+        if path.exists():
+            categories.append(summarize_log(path, label))
+    totals = {key: sum(row[key] for row in categories)
+              for key in ("passed", "failed", "skipped", "total")}
+    lines = [
+        "========== DJI ACCEPTANCE SUMMARY ==========",
+        f"PR #{report['pr']} | SHA {report['head_sha'][:8]} | Profile: {report['profile']}",
+        f"{'Category':<25} {'Passed':>6} {'Failed':>6} {'Skipped':>7} {'Total':>6}",
+    ]
+    for row in categories:
+        lines.append(f"{row['category']:<25} {row['passed']:>6} {row['failed']:>6} {row['skipped']:>7} {row['total']:>6}")
+    lines.append("-" * 56)
+    lines.append(f"{'TOTAL':<25} {totals['passed']:>6} {totals['failed']:>6} {totals['skipped']:>7} {totals['total']:>6}")
+    failures = [f"{row['category']}: {name}" for row in categories for name in row["failed_tests"]]
+    lines.append("Failed tests: " + ("None" if not failures else "\\n  " + "\\n  ".join(failures)))
+    if failure:
+        lines.append(f"Blocker: {failure}")
+    lines.append("Result: " + ("BLOCKED" if failure else "PASSED"))
+    lines.append("UI acceptance: " + report["ui_acceptance"].upper())
+    lines.append("============================================")
+    summary = "\\n".join(lines) + "\\n"
+    (report_dir / "summary.txt").write_text(summary, encoding="utf-8")
+    report["summary"] = str(report_dir / "summary.txt")
+    report["test_counts"] = {"categories": categories, "total": totals}
+    print(summary, flush=True)
+
+
+
 def execute(pr, repo):
     sha, worktree, changed = prepare_worktree(repo, pr)
     profile = classify(changed)
@@ -173,6 +229,8 @@ def execute(pr, repo):
         profile = override
     report_dir = Path.home() / ".dji-stock-acceptance" / f"pr-{pr}" / sha
     report_dir.mkdir(parents=True, exist_ok=True)
+    for stale in ("tests.log", "ollama-e2e.log", "summary.txt"):
+        (report_dir / stale).unlink(missing_ok=True)
     report_path = report_dir / "result.json"
     log_path = report_dir / "tests.log"
     report = {
@@ -239,9 +297,11 @@ def execute(pr, repo):
         report["local_tests"] = "blocked"
         report["checks"]["failure"] = {"status": "blocked", "reason": str(exc)}
         report["error"] = str(exc)
+        print_summary(report, report_dir, failure=str(exc))
         report_path.write_text(json.dumps(report, indent=2) + "\n")
         print(f"ACCEPTANCE BLOCKED: {exc}\nReport: {report_path}", file=sys.stderr)
         return 1
+    print_summary(report, report_dir)
     report_path.write_text(json.dumps(report, indent=2) + "\n")
     print(f"PR #{pr} SHA {sha}\nProfile: {profile}\nReport: {report_path}")
     if profile == "docs":
