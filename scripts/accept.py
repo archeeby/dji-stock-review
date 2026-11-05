@@ -111,6 +111,7 @@ def execute(pr, repo):
         "environment": {"platform": sys.platform, "python": sys.version.split()[0]},
         "local_tests": "pending", "ui_acceptance": "pending",
         "log": str(log_path), "notes": [],
+        "checks": [],
         "checks": {
             "unittest_discovery": {"status": "pending" if profile != "docs" else "not_applicable", "reason": "Documentation-only change" if profile == "docs" else None},
             "real_dji_opencv": {"status": "pending" if profile != "docs" else "not_applicable", "reason": "Included in unittest discovery" if profile != "docs" else "Documentation-only change"},
@@ -124,6 +125,8 @@ def execute(pr, repo):
         report["environment"]["test_python"] = str(python)
         prerequisites(profile, worktree)
         if profile == "docs":
+            report["checks"].append({"name": "automated_tests", "status": "not_applicable", "reason": "docs-only"})
+            report["checks"].append({"name": "ollama_e2e", "status": "not_applicable", "reason": "docs-only"})
             report["local_tests"] = "not_applicable"
             report["ui_acceptance"] = "not_applicable"
             report["notes"].append("Documentation-only PR; GitHub Actions CI remains mandatory")
@@ -138,15 +141,21 @@ def execute(pr, repo):
                 with log_path.open("w", encoding="utf-8") as log:
                     result = subprocess.run(args, cwd=worktree, env=env, stdout=log,
                                             stderr=subprocess.STDOUT, timeout=1800)
+                    report["checks"].append({"name": "unit_and_real_media", "status": "passed" if result.returncode == 0 else "failed", "exit_code": result.returncode})
                     if result.returncode:
                         raise RuntimeError(f"Local tests failed (exit {result.returncode}); see {log_path}")
                     if profile == "ai":
+                        ai_env = env.copy()
+                        ai_env["DJI_RUN_OLLAMA_E2E"] = "1"
                         result = subprocess.run(
                             [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
-                            cwd=worktree, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=3600,
+                            cwd=worktree, env=ai_env, stdout=log, stderr=subprocess.STDOUT, timeout=3600,
                         )
+                        report["checks"].append({"name": "ollama_e2e", "status": "passed" if result.returncode == 0 else "failed", "exit_code": result.returncode})
                         if result.returncode:
                             raise RuntimeError(f"Ollama E2E failed (exit {result.returncode}); see {log_path}")
+                    else:
+                        report["checks"].append({"name": "ollama_e2e", "status": "not_applicable", "reason": "no AI code changed"})
             report["local_tests"] = "passed"
             for name in ("unittest_discovery", "real_dji_opencv", "real_ffmpeg_exiftool"):
                 report["checks"][name]["status"] = "passed"
