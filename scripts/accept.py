@@ -150,10 +150,19 @@ def execute(pr, repo):
                     if profile == "ai":
                         ai_env = env.copy()
                         ai_env["DJI_RUN_OLLAMA_E2E"] = "1"
-                        result = subprocess.run(
-                            [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
-                            cwd=worktree, env=ai_env, stdout=log, stderr=subprocess.STDOUT, timeout=3600,
-                        )
+                        log.flush()
+                        ai_log_path = report_dir / "ollama-e2e.log"
+                        with ai_log_path.open("w", encoding="utf-8") as ai_log:
+                            result = subprocess.run(
+                                [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
+                                cwd=worktree, env=ai_env, stdout=ai_log,
+                                stderr=subprocess.STDOUT, timeout=3600,
+                            )
+                        ai_output = ai_log_path.read_text(encoding="utf-8")
+                        report["checks"]["ollama_e2e"]["log"] = str(ai_log_path)
+                        if "Ran 1 test" not in ai_output or "skipped" in ai_output.lower() or " ... ok" not in ai_output:
+                            report["checks"]["ollama_e2e"]["status"] = "failed"
+                            raise RuntimeError(f"Ollama E2E did not execute exactly one successful test; see {ai_log_path}")
                         if result.returncode:
                             report["checks"]["ollama_e2e"]["status"] = "failed"
                             raise RuntimeError(f"Ollama E2E failed (exit {result.returncode}); see {log_path}")
