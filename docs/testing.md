@@ -8,7 +8,7 @@ This document distinguishes tests that **exist today** from planned checks. It a
 | --- | --- | --- | --- | --- |
 | **Unit / component** | Domain logic, state, validation, adapters, and isolated UI behavior; mocks/synthetic inputs where appropriate | Python 3.12, `pip install -e .` | Local and hosted GitHub Actions | Automated under `tests/` |
 | **Lightweight real-tool integration** | Actual original DJI MP4 → OpenCV motion/composition analysis → deterministic clip candidates; SHA-256 and clip constraints | Same Python dependencies, checked-in MP4; **no Ollama** | Local and hosted GitHub Actions | Automated in `tests/test_real_dji_motion.py` |
-| **Heavy AI / end-to-end** | Actual Ollama vision analysis and stock metadata; ultimately review, export, playable media and metadata verification | Python, OpenCV, Ollama server, `qwen3-vl:4b`, `qwen3:4b`; FFmpeg/ExifTool for full pipeline and GPS; network for uncached geocoding | Local controlled environment only | **Opt-in automated Ollama vision + metadata contract test exists (`tests/test_ollama_e2e.py`); full export E2E remains unimplemented** |
+| **Heavy AI / end-to-end** | Actual Ollama vision analysis and stock metadata; ultimately review, export, playable media and metadata verification | Python, OpenCV, Ollama server, `qwen3-vl:4b`, `qwen3:4b`; FFmpeg/ExifTool for full pipeline and GPS; network for uncached geocoding | Local controlled environment only | **Automated real Ollama vision + metadata + FFmpeg export E2E exists (`tests/test_ollama_e2e.py`); runs locally only** |
 
 The word *integration* does not imply AI. The current video integration test exercises real OpenCV and deterministic scripts, not Ollama.
 
@@ -105,9 +105,9 @@ python run_pipeline.py originals/ai-smoke/354022_DJI_0408.MP4 --location "Unknow
 
 Manual smoke-test acceptance checks: successful process exit; candidate JSON and AI JSON generated for each candidate; stock metadata JSON with title and keywords; source file SHA-256 unchanged. This does **not** establish AI content quality, export correctness, or full end-to-end coverage. Model outputs may vary; validate contracts and quality constraints, not exact generated prose.
 
-## What a future full-pipeline heavy E2E must add
+## Real-model E2E coverage and remaining limits
 
-The opt-in `tests/test_ollama_e2e.py` already validates real Ollama vision and stock metadata contracts with temporary paths. A future full-pipeline E2E must additionally exercise the complete pipeline, approved export path, and resulting MP4 with FFprobe (duration, codec, playback) and stock metadata contracts. Make cleanup safe and restricted to test-owned files. Because current code hardcodes `~/DroneStock`, isolation requires a design/code change before declaring this a safe automated E2E.
+The opt-in `tests/test_ollama_e2e.py` exercises actual Ollama vision and metadata, then an approved export through real FFmpeg using disposable copies and temporary paths. It verifies generated contracts rather than exact nondeterministic prose. It does not certify external stock-platform uploads or replace manual UI review. See [Issue #2 coverage matrix](design/baseline-test-coverage.md).
 
 Do not enable heavy AI E2E on ordinary hosted PR CI or silently download multi-GB models. A future manually triggered/self-hosted runner must be isolated from personal data and must not execute untrusted pull-request code.
 
@@ -139,3 +139,26 @@ DJI_ACCEPT_PROFILE=ai bash scripts/accept.sh 12
 This runs `tests/test_ollama_e2e.py` against a running local Ollama with both **already installed** `qwen3-vl:4b` and `qwen3:4b`. The test extracts a real video frame, performs both model calls and validates their output contracts, all under temporary HOME and output paths. It never downloads models, modifies the committed DJI fixture, or uses the personal video library. Model responses are nondeterministic: assertions cover schema and basic constraints, not exact prose. A missing model, Ollama failure, or missing output blocks acceptance. **No heavy AI model test runs on hosted GitHub CI.** The opt-in test is skipped there by design, and that skip must never be presented as a passed AI E2E.
 
 A passing automated report is not human UI approval or permission to merge. Local tests run with filesystem path redirection, not a hardened OS sandbox; inspect third-party code before execution. The runner rechecks PR SHA before launching the preview; new commits require new evidence. Explicit human merge approval and green CI on the exact current SHA remain mandatory.
+
+
+## Issue #2 completion — PR #17 (2026-11-05)
+
+The accepted PR head was `922de7e3`; local AI-profile acceptance reported **102/102** unit and DJI integration tests plus **1/1** real Ollama/FFmpeg E2E, with **0 failures and 0 skips**. Both Ubuntu and macOS CI jobs succeeded, and five manual UI checks were confirmed. PR #17 was merged into `main` as `e32c0958`.
+
+For a new open PR, use:
+
+```bash
+cd ~/DroneStock
+DJI_ACCEPT_PROFILE=ai bash scripts/accept.sh <PR-number>
+```
+
+The SHA-bound acceptance runner writes `tests.json`, `ollama-e2e.json`, logs, `summary.txt` and `result.json` to `~/.dji-stock-acceptance/pr-<number>/<sha>/`. Ollama is intentionally excluded from discovery and run separately; **any unexpected skip, inconsistent count or failed required suite blocks acceptance**. The Streamlit preview is not data-isolated.
+
+For direct testing on updated `main`, the ordinary `unittest discover` command above may still report the opt-in Ollama class as skipped; use the structured runner's distinct suites to avoid counting it as unverified:
+
+```bash
+python scripts/structured_tests.py --suite discovery --json /tmp/dji-tests.json
+DJI_RUN_OLLAMA_E2E=1 python scripts/structured_tests.py --suite ollama --json /tmp/dji-ollama.json
+```
+
+The second command requires a running local Ollama and both installed models.
