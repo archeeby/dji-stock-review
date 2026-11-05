@@ -1,20 +1,20 @@
 # Testing strategy and local execution
 
-This document distinguishes tests that **exist today** from planned checks. It applies to macOS ARM64 (locally exercised with Python 3.12) and the GitHub Actions Ubuntu/macOS matrix (Python 3.11/3.12). See [setup](setup.md) for installation details.
+This document distinguishes tests that **exist today** from planned checks. It applies to macOS ARM64 (locally exercised with Python 3.12) and the GitHub Actions Ubuntu/macOS matrix (Python 3.12). See [setup](setup.md) for installation details.
 
 ## Three test levels
 
 | Level | Scope | Dependencies | Where | Current status |
 | --- | --- | --- | --- | --- |
-| **Unit / component** | Domain logic, state, validation, adapters, and isolated UI behavior; mocks/synthetic inputs where appropriate | Python >=3.11, `pip install -e .` | Local and hosted GitHub Actions | Automated under `tests/` |
+| **Unit / component** | Domain logic, state, validation, adapters, and isolated UI behavior; mocks/synthetic inputs where appropriate | Python 3.12, `pip install -e .` | Local and hosted GitHub Actions | Automated under `tests/` |
 | **Lightweight real-tool integration** | Actual original DJI MP4 → OpenCV motion/composition analysis → deterministic clip candidates; SHA-256 and clip constraints | Same Python dependencies, checked-in MP4; **no Ollama** | Local and hosted GitHub Actions | Automated in `tests/test_real_dji_motion.py` |
-| **Heavy AI / end-to-end** | Actual Ollama vision analysis and stock metadata; ultimately review, export, playable media and metadata verification | Python, OpenCV, Ollama server, `qwen3-vl:4b`, `qwen3:4b`; FFmpeg/ExifTool for full pipeline and GPS; network for uncached geocoding | Local controlled environment only | **Manual AI pipeline smoke test available; full automated E2E does not yet exist** |
+| **Heavy AI / end-to-end** | Actual Ollama vision analysis and stock metadata; ultimately review, export, playable media and metadata verification | Python, OpenCV, Ollama server, `qwen3-vl:4b`, `qwen3:4b`; FFmpeg/ExifTool for full pipeline and GPS; network for uncached geocoding | Local controlled environment only | **Opt-in automated Ollama vision + metadata contract test exists (`tests/test_ollama_e2e.py`); full export E2E remains unimplemented** |
 
 The word *integration* does not imply AI. The current video integration test exercises real OpenCV and deterministic scripts, not Ollama.
 
 ## Prerequisites for unit and lightweight integration
 
-1. Clone the repository and install **Python 3.12** (Python 3.11 is also tested by CI).
+1. Clone the repository and install **Python 3.12**.
 2. Use a Python 3.12 virtual environment; install project dependencies.
 3. No GPU, Ollama models, external network service or local personal footage is needed after the repository and dependencies are available. The explicitly approved fixture is versioned in Git.
 
@@ -72,13 +72,13 @@ The override still checks that the video is not modified, but does not assert th
 Workflow: `.github/workflows/tests.yml`.
 
 - Triggers: pull requests and pushes to `main`.
-- Matrix: `ubuntu-latest` and `macos-latest`, each with Python 3.11 and 3.12 (four jobs).
+- Matrix: `ubuntu-latest` and `macos-latest`, each with Python 3.12 (two jobs).
 - Steps: checkout (includes the MP4 fixture), `pip install -e .`, `compileall`, and `python -m unittest discover -s tests -v`.
 - **Both** unit/component and lightweight integration tests run in each job. The job's historical name `unit-tests` does not mean it runs only unit tests.
 - **No** Ollama installation, model download, AI inference or full export E2E is configured.
 - A local passing run is not proof of CI success: inspect the actual checks in the pull request, including macOS and Ubuntu results.
 
-## Heavy AI pipeline: manual local smoke test (not automated E2E)
+## Heavy AI pipeline: automated opt-in contract test and manual smoke test
 
 Additional prerequisites:
 
@@ -105,9 +105,9 @@ python run_pipeline.py originals/ai-smoke/354022_DJI_0408.MP4 --location "Unknow
 
 Manual smoke-test acceptance checks: successful process exit; candidate JSON and AI JSON generated for each candidate; stock metadata JSON with title and keywords; source file SHA-256 unchanged. This does **not** establish AI content quality, export correctness, or full end-to-end coverage. Model outputs may vary; validate contracts and quality constraints, not exact generated prose.
 
-## What a future automated heavy E2E must add
+## What a future full-pipeline heavy E2E must add
 
-An explicit, separately approved test harness should isolate its input/output directories, avoid personal footage and existing metadata, verify both Ollama models are ready, invoke the pipeline, validate structured AI results, then exercise the approved export path and verify the resulting MP4 with FFprobe (duration, codec, playback) and stock metadata contracts. Make cleanup safe and restricted to test-owned files. Because current code hardcodes `~/DroneStock`, isolation requires a design/code change before declaring this a safe automated E2E.
+The opt-in `tests/test_ollama_e2e.py` already validates real Ollama vision and stock metadata contracts with temporary paths. A future full-pipeline E2E must additionally exercise the complete pipeline, approved export path, and resulting MP4 with FFprobe (duration, codec, playback) and stock metadata contracts. Make cleanup safe and restricted to test-owned files. Because current code hardcodes `~/DroneStock`, isolation requires a design/code change before declaring this a safe automated E2E.
 
 Do not enable heavy AI E2E on ordinary hosted PR CI or silently download multi-GB models. A future manually triggered/self-hosted runner must be isolated from personal data and must not execute untrusted pull-request code.
 
@@ -118,3 +118,24 @@ Do not enable heavy AI E2E on ordinary hosted PR CI or silently download multi-G
 - Heavy AI failure: check Ollama availability, model tags, RAM, network/GPS resolution, cached metadata and actual JSON contracts before changing production behavior.
 
 Never merge solely because one local test passed. Review all required CI checks and obtain explicit human approval to merge.
+
+
+## Issue #8: one-command SHA-bound PR acceptance
+
+Run from the main checkout on macOS with the Python 3.12 virtualenv, FFmpeg, FFprobe, and ExifTool installed:
+
+```bash
+bash scripts/accept.sh 12
+```
+
+The runner fetches the exact PR head into a separate Git worktree, chooses the most demanding applicable profile, and records the SHA, changed paths, environment, per-check results, failure details and test log in `~/.dji-stock-acceptance/pr-<number>/<sha>/`. Its normal test run includes the real DJI/OpenCV/FFmpeg/ExifTool suite. `docs` is explicitly N/A; non-AI PRs record Ollama as N/A, not passed. Missing dependencies and test failures block the preview. The Streamlit preview is **not isolated** and can access real runtime data; do not modify existing review decisions or metadata.
+
+For an explicit **stricter** local AI acceptance run (including for this PR, whose ordinary changed-file profile is `unit`):
+
+```bash
+DJI_ACCEPT_PROFILE=ai bash scripts/accept.sh 12
+```
+
+This runs `tests/test_ollama_e2e.py` against a running local Ollama with both **already installed** `qwen3-vl:4b` and `qwen3:4b`. The test extracts a real video frame, performs both model calls and validates their output contracts, all under temporary HOME and output paths. It never downloads models, modifies the committed DJI fixture, or uses the personal video library. Model responses are nondeterministic: assertions cover schema and basic constraints, not exact prose. A missing model, Ollama failure, or missing output blocks acceptance. **No heavy AI model test runs on hosted GitHub CI.** The opt-in test is skipped there by design, and that skip must never be presented as a passed AI E2E.
+
+A passing automated report is not human UI approval or permission to merge. Local tests run with filesystem path redirection, not a hardened OS sandbox; inspect third-party code before execution. The runner rechecks PR SHA before launching the preview; new commits require new evidence. Explicit human merge approval and green CI on the exact current SHA remain mandatory.

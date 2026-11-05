@@ -16,8 +16,7 @@ st.markdown("""<style>
 /* Laptop-first: retain readable controls while removing Streamlit's default gaps. */
 .block-container {max-width:100% !important;padding:3.6rem 0.85rem 1.2rem !important}
 [data-testid="stVerticalBlock"] {gap:.26rem}
-/* Keep both main columns top-aligned. */
-[data-testid="stHorizontalBlock"] {align-items:stretch}
+/* Preserve Streamlit column alignment rather than forcing every row to stretch. */
 /* Bottom-align navigation and trim buttons with adjacent input widgets. */
 div.st-key-review_navigation [data-testid="stHorizontalBlock"],
 div.st-key-trim_controls [data-testid="stHorizontalBlock"] {align-items:flex-end !important}
@@ -297,27 +296,27 @@ with left:
         with trim_controls:
             start_col, end_col, minus_col, plus_col, reset_col = st.columns(
                 [1, 1, .38, .38, .65], gap="small", vertical_alignment="bottom")
-        with start_col:
-            st.number_input("Start (s)", min_value=0.0, max_value=trim_max, step=0.1,
-                            format="%.2f", key=start_key,
-                            on_change=normalize_editor, args=("start",))
-        with end_col:
-            st.number_input("End (s)", min_value=0.0, max_value=trim_max, step=0.1,
-                            format="%.2f", key=end_key,
-                            on_change=normalize_editor, args=("end",))
-        start, end = float(st.session_state[start_key]), float(st.session_state[end_key])
-        valid = valid_trim(start, end, duration)
-        with minus_col:
-            st.button("−", key=f"trim_minus:{identity}", use_container_width=True,
-                      disabled=end <= start + MIN_CLIP_SECONDS + 1e-9,
-                      help="Shorten by 1 second", on_click=adjust_end, args=(-1.0,))
-        with plus_col:
-            st.button("+", key=f"trim_plus:{identity}", use_container_width=True,
-                      disabled=end >= trim_max - 1e-9,
-                      help="Extend by 1 second", on_click=adjust_end, args=(1.0,))
-        with reset_col:
-            st.button("Reset", help="Restore original AI-generated clip boundaries", use_container_width=True,
-                      on_click=reset_trim)
+            with start_col:
+                st.number_input("Start (s)", min_value=0.0, max_value=trim_max, step=0.1,
+                                format="%.2f", key=start_key,
+                                on_change=normalize_editor, args=("start",))
+            with end_col:
+                st.number_input("End (s)", min_value=0.0, max_value=trim_max, step=0.1,
+                                format="%.2f", key=end_key,
+                                on_change=normalize_editor, args=("end",))
+            start, end = float(st.session_state[start_key]), float(st.session_state[end_key])
+            valid = valid_trim(start, end, duration)
+            with minus_col:
+                st.button("−", key=f"trim_minus:{identity}", use_container_width=True,
+                          disabled=end <= start + MIN_CLIP_SECONDS + 1e-9,
+                          help="Shorten by 1 second", on_click=adjust_end, args=(-1.0,))
+            with plus_col:
+                st.button("+", key=f"trim_plus:{identity}", use_container_width=True,
+                          disabled=end >= trim_max - 1e-9,
+                          help="Extend by 1 second", on_click=adjust_end, args=(1.0,))
+            with reset_col:
+                st.button("Reset", help="Restore original AI-generated clip boundaries", use_container_width=True,
+                          on_click=reset_trim)
         if not valid:
             st.error("Invalid trim: minimum 5 seconds; boundaries must be within source duration")
 with right:

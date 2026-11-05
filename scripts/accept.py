@@ -73,19 +73,21 @@ def find_python(repo):
     for path in (repo / ".venv312/bin/python", repo / ".venv/bin/python"):
         if path.is_file():
             result = subprocess.run([str(path), "-c",
-                "import sys, streamlit; assert sys.version_info >= (3, 11)"],
+                "import sys, streamlit; assert sys.version_info[:2] == (3, 12)"],
                 capture_output=True)
             if result.returncode == 0:
                 return path
-    raise RuntimeError("Missing Python >=3.11 with Streamlit in .venv312 or .venv")
+    raise RuntimeError("Missing Python 3.12 with Streamlit in .venv312 or .venv")
 
 
 def prerequisites(profile, worktree):
     required = []
-    if profile in ("media", "ai"):
+    if profile != "docs":
+        # The default unittest discovery always executes real DJI media tests.
         required = ["ffmpeg", "ffprobe", "exiftool"]
-        if not (worktree / "tests/test_real_dji_tools.py").is_file():
-            raise RuntimeError("Required real FFmpeg/ExifTool integration tests are not present")
+        for test in ("tests/test_real_dji_tools.py", "tests/test_real_dji_motion.py"):
+            if not (worktree / test).is_file():
+                raise RuntimeError(f"Required real media integration test is not present: {test}")
     if profile == "ai":
         if not (worktree / "tests/test_ollama_e2e.py").is_file():
             raise RuntimeError("Required isolated Ollama E2E test is not implemented; merge blocked")
@@ -95,19 +97,46 @@ def prerequisites(profile, worktree):
         raise RuntimeError(f"Missing required tools: {', '.join(missing)}")
 
 
+def verify_ollama_result(output, returncode):
+    """Fail closed on skipped/empty/missing E2E even when unittest exits zero."""
+    import re
+    if returncode != 0:
+        raise RuntimeError(f"Ollama E2E process exited {returncode}")
+    if not re.search(r"^test_real_frame_vision_and_stock_metadata .* \.\.\. ok$", output, re.MULTILINE):
+        raise RuntimeError("Required Ollama E2E test did not complete successfully")
+    if not re.search(r"^Ran 1 test in ", output, re.MULTILINE):
+        raise RuntimeError("Expected exactly one Ollama E2E test")
+    if re.search(r"\b(skipped|SKIP|FAILED|ERROR)\b", output):
+        raise RuntimeError("Ollama E2E was skipped or failed")
+
+
 def execute(pr, repo):
     sha, worktree, changed = prepare_worktree(repo, pr)
     profile = classify(changed)
+    override = os.environ.get("DJI_ACCEPT_PROFILE")
+    order = {"docs": 0, "unit": 1, "media": 2, "ai": 3}
+    if override:
+        if override not in order or order[override] < order[profile]:
+            raise ValueError(f"Unsafe acceptance profile override: {override!r} (required: {profile})")
+        profile = override
     report_dir = Path.home() / ".dji-stock-acceptance" / f"pr-{pr}" / sha
     report_dir.mkdir(parents=True, exist_ok=True)
     report_path = report_dir / "result.json"
     log_path = report_dir / "tests.log"
     report = {
-        "pr": pr, "head_sha": sha, "profile": profile, "changed_files": changed,
+        "schema_version": 2,
+        "pr": pr, "head_sha": sha, "profile": profile, "profile_override": override, "changed_files": changed,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "environment": {"platform": sys.platform, "python": sys.version.split()[0]},
         "local_tests": "pending", "ui_acceptance": "pending",
         "log": str(log_path), "notes": [],
+        "checks": {
+            "unittest_discovery": {"status": "pending" if profile != "docs" else "not_applicable", "reason": "Documentation-only change" if profile == "docs" else None},
+            "real_dji_opencv": {"status": "pending" if profile != "docs" else "not_applicable", "reason": "Included in unittest discovery" if profile != "docs" else "Documentation-only change"},
+            "real_ffmpeg_exiftool": {"status": "pending" if profile != "docs" else "not_applicable", "reason": "Included in unittest discovery" if profile != "docs" else "Documentation-only change"},
+            "ollama_e2e": {"status": "pending" if profile == "ai" else "not_applicable", "reason": None if profile == "ai" else "No AI/pipeline files changed"},
+            "streamlit_preview": {"status": "pending" if profile != "docs" else "not_applicable", "reason": None if profile != "docs" else "Documentation-only change"},
+        },
     }
     try:
         python = find_python(repo)
@@ -119,8 +148,6 @@ def execute(pr, repo):
             report["notes"].append("Documentation-only PR; GitHub Actions CI remains mandatory")
         else:
             args = [str(python), "-m", "unittest", "discover", "-s", "tests", "-v"]
-            if profile == "ai":
-                args += []  # AI E2E is invoked separately below, after the normal suite.
             # Redirect Path.home() and temp writes away from ~/DroneStock during tests.
             # This is filesystem path isolation, not an OS-level security sandbox.
             with tempfile.TemporaryDirectory(prefix="dji-accept-home-") as sandbox:
@@ -131,18 +158,35 @@ def execute(pr, repo):
                     result = subprocess.run(args, cwd=worktree, env=env, stdout=log,
                                             stderr=subprocess.STDOUT, timeout=1800)
                     if result.returncode:
+                        report["checks"]["unittest_discovery"]["status"] = "failed"
                         raise RuntimeError(f"Local tests failed (exit {result.returncode}); see {log_path}")
                     if profile == "ai":
-                        result = subprocess.run(
-                            [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
-                            cwd=worktree, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=3600,
-                        )
-                        if result.returncode:
-                            raise RuntimeError(f"Ollama E2E failed (exit {result.returncode}); see {log_path}")
+                        ai_env = env.copy()
+                        ai_env["DJI_RUN_OLLAMA_E2E"] = "1"
+                        log.flush()
+                        ai_log_path = report_dir / "ollama-e2e.log"
+                        with ai_log_path.open("w", encoding="utf-8") as ai_log:
+                            result = subprocess.run(
+                                [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
+                                cwd=worktree, env=ai_env, stdout=ai_log,
+                                stderr=subprocess.STDOUT, timeout=3600,
+                            )
+                        ai_output = ai_log_path.read_text(encoding="utf-8")
+                        report["checks"]["ollama_e2e"]["log"] = str(ai_log_path)
+                        try:
+                            verify_ollama_result(ai_output, result.returncode)
+                        except RuntimeError:
+                            report["checks"]["ollama_e2e"]["status"] = "failed"
+                            raise
             report["local_tests"] = "passed"
+            for name in ("unittest_discovery", "real_dji_opencv", "real_ffmpeg_exiftool"):
+                report["checks"][name]["status"] = "passed"
+            if profile == "ai":
+                report["checks"]["ollama_e2e"]["status"] = "passed"
             report["notes"].append("UI acceptance is pending until the human verifies the preview")
     except Exception as exc:
         report["local_tests"] = "blocked"
+        report["checks"]["failure"] = {"status": "blocked", "reason": str(exc)}
         report["error"] = str(exc)
         report_path.write_text(json.dumps(report, indent=2) + "\n")
         print(f"ACCEPTANCE BLOCKED: {exc}\nReport: {report_path}", file=sys.stderr)
@@ -157,13 +201,21 @@ def execute(pr, repo):
                       f"refs/pull/{pr}/head").stdout.split()
     if not current or current[0] != sha:
         report["local_tests"] = "stale"
+        report["checks"]["streamlit_preview"] = {"status": "blocked", "reason": "PR HEAD changed after tests"}
         report["error"] = "PR HEAD changed during local acceptance"
         report_path.write_text(json.dumps(report, indent=2) + "\n")
         print(report["error"], file=sys.stderr)
         return 1
     print("Tests passed. Launching Streamlit; UI acceptance remains manual.")
     print("WARNING: Streamlit preview SHARES ~/DroneStock runtime data. Avoid modifying real records.")
-    return subprocess.call(["bash", str(worktree / "scripts/preview.sh"), str(pr)], cwd=worktree)
+    preview_env = os.environ.copy()
+    preview_env["DJI_EXPECTED_PR_SHA"] = sha
+    preview_exit = subprocess.call(["bash", str(worktree / "scripts/preview.sh"), str(pr)], cwd=worktree, env=preview_env)
+    report["checks"]["streamlit_preview"] = {"status": "launched" if preview_exit == 0 else "blocked", "reason": "Human UI approval remains pending" if preview_exit == 0 else f"Preview exited with status {preview_exit}"}
+    if preview_exit:
+        report["error"] = f"Streamlit preview failed (exit {preview_exit})"
+    report_path.write_text(json.dumps(report, indent=2) + "\n")
+    return preview_exit
 
 
 def main():
