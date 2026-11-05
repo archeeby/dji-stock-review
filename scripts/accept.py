@@ -169,7 +169,7 @@ def summarize_log(path, label):
     rows = []
     if path.exists():
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            match = re.match(r"^(test\\S+ \\(.*?\\)) \\.\\.\\. (ok|FAIL|ERROR|skipped .*|expected failure|unexpected success)$", line)
+            match = re.match(r"^(test\S+ \(.*?\)) \.\.\. (ok|FAIL|ERROR|skipped .*|expected failure|unexpected success)$", line)
             if match:
                 outcome = match.group(2)
                 status = ("passed" if outcome in ("ok", "expected failure")
@@ -204,13 +204,13 @@ def print_summary(report, report_dir, failure=None):
     lines.append("-" * 56)
     lines.append(f"{'TOTAL':<25} {totals['passed']:>6} {totals['failed']:>6} {totals['skipped']:>7} {totals['total']:>6}")
     failures = [f"{row['category']}: {name}" for row in categories for name in row["failed_tests"]]
-    lines.append("Failed tests: " + ("None" if not failures else "\\n  " + "\\n  ".join(failures)))
+    lines.append("Failed tests: " + ("None" if not failures else "\n  " + "\n  ".join(failures)))
     if failure:
         lines.append(f"Blocker: {failure}")
     lines.append("Result: " + ("BLOCKED" if failure else "PASSED"))
     lines.append("UI acceptance: " + report["ui_acceptance"].upper())
     lines.append("============================================")
-    summary = "\\n".join(lines) + "\\n"
+    summary = "\n".join(lines) + "\n"
     (report_dir / "summary.txt").write_text(summary, encoding="utf-8")
     report["summary"] = str(report_dir / "summary.txt")
     report["test_counts"] = {"categories": categories, "total": totals}
