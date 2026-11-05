@@ -4,6 +4,9 @@ Usage: python scripts/accept.py PR_NUMBER
 A successful automated test run is NOT human UI approval.
 """
 import argparse
+import re
+import threading
+import time
 from datetime import datetime, timezone
 import json
 import os
@@ -97,17 +100,119 @@ def prerequisites(profile, worktree):
         raise RuntimeError(f"Missing required tools: {', '.join(missing)}")
 
 
-def verify_ollama_result(output, returncode):
-    """Fail closed on skipped/empty/missing E2E even when unittest exits zero."""
-    import re
-    if returncode != 0:
-        raise RuntimeError(f"Ollama E2E process exited {returncode}")
-    if not re.search(r"^test_real_frame_vision_and_stock_metadata .* \.\.\. ok$", output, re.MULTILINE):
-        raise RuntimeError("Required Ollama E2E test did not complete successfully")
-    if not re.search(r"^Ran 1 test in ", output, re.MULTILINE):
-        raise RuntimeError("Expected exactly one Ollama E2E test")
-    if re.search(r"\b(skipped|SKIP|FAILED|ERROR)\b", output):
-        raise RuntimeError("Ollama E2E was skipped or failed")
+def verify_ollama_result(data, returncode):
+    """Verify a real named Ollama test from structured unittest results."""
+    if returncode != 0 or not data.get("successful"):
+        raise RuntimeError("Ollama E2E process failed")
+    if data.get("total") != 1 or data.get("failed") or data.get("skipped") or data.get("skips"):
+        raise RuntimeError("Expected exactly one successful, unskipped Ollama E2E test")
+    tests = data.get("tests", [])
+    if len(tests) != 1 or tests[0].get("status") != "passed" or not tests[0].get("id", "").endswith(".test_real_frame_vision_and_stock_metadata"):
+        raise RuntimeError("Required real Ollama E2E test not confirmed by structured results")
+
+
+def run_visible(args, *, cwd, env, log_path, timeout, label):
+    """Stream test output live, retain full logs, and report long-running tests."""
+    started = time.monotonic()
+    last_output = [started]
+    stop = threading.Event()
+    print(f"[RUN] {label}: {' '.join(args[-4:])}", flush=True)
+
+    def heartbeat():
+        while not stop.wait(15):
+            elapsed = int(time.monotonic() - started)
+            silent = int(time.monotonic() - last_output[0])
+            print(f"[WAIT] {label}: {elapsed}s elapsed, {silent}s since last output", flush=True)
+
+    monitor = threading.Thread(target=heartbeat, daemon=True)
+    monitor.start()
+    process = None
+    try:
+        with log_path.open("w", encoding="utf-8") as log:
+            process = subprocess.Popen(
+                args, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, bufsize=1,
+            )
+            def pump():
+                for line in process.stdout:
+                    log.write(line)
+                    log.flush()
+                    last_output[0] = time.monotonic()
+                    print(line, end="", flush=True)
+
+            reader = threading.Thread(target=pump, daemon=True)
+            reader.start()
+            process.wait(timeout=timeout)
+            reader.join(timeout=10)
+            if reader.is_alive():
+                raise RuntimeError(f"{label}: output reader did not finish")
+            code = process.returncode
+    except subprocess.TimeoutExpired as exc:
+        if process is not None:
+            process.kill()
+            process.wait()
+        raise RuntimeError(f"{label} timed out after {timeout}s; see {log_path}") from exc
+    finally:
+        stop.set()
+        monitor.join(timeout=2)
+    elapsed = time.monotonic() - started
+    print(f"[{'PASS' if code == 0 else 'FAIL'}] {label}: {elapsed:.1f}s; log: {log_path}", flush=True)
+    return code
+
+
+
+def summarize_log(path, label):
+    """Read canonical JSON produced by StructuredResult, never console text."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema_version") != 1 or "tests" not in data:
+        raise RuntimeError(f"Invalid structured test report: {path}")
+    return {
+        "category": label, "total": data["total"],
+        "passed": data["passed"], "failed": data["failed"],
+        "skipped": data["skipped"],
+        "failed_tests": [t["id"] for t in data["tests"] if t["status"] == "failed"],
+        "count_mismatch": data["total"] != data["passed"] + data["failed"] + data["skipped"],
+        "skips": data.get("skips", []),
+    }
+
+
+def print_summary(report, report_dir, failure=None):
+    categories = []
+    for filename, label in (("tests.json", "Unit & DJI integration"),
+                            ("ollama-e2e.json", "Real Ollama E2E")):
+        path = report_dir / filename
+        if path.exists():
+            categories.append(summarize_log(path, label))
+    totals = {key: sum(row[key] for row in categories)
+              for key in ("passed", "failed", "skipped", "total")}
+    lines = [
+        "========== DJI ACCEPTANCE SUMMARY ==========",
+        f"PR #{report['pr']} | SHA {report['head_sha'][:8]} | Profile: {report['profile']}",
+        f"{'Category':<25} {'Passed':>6} {'Failed':>6} {'Skipped':>7} {'Total':>6}",
+    ]
+    for row in categories:
+        lines.append(f"{row['category']:<25} {row['passed']:>6} {row['failed']:>6} {row['skipped']:>7} {row['total']:>6}")
+    lines.append("-" * 56)
+    lines.append(f"{'TOTAL':<25} {totals['passed']:>6} {totals['failed']:>6} {totals['skipped']:>7} {totals['total']:>6}")
+    failures = [f"{row['category']}: {name}" for row in categories for name in row["failed_tests"]]
+    lines.append("Failed tests: " + ("None" if not failures else "\n  " + "\n  ".join(failures)))
+    for row in categories:
+        for skip in row["skips"]:
+            lines.append("Skipped: {}: {} — {}".format(row["category"], skip["id"], skip["reason"]))
+    mismatches = [row["category"] for row in categories if row["count_mismatch"]]
+    if mismatches:
+        lines.append("Warning: structured test count mismatch: " + ", ".join(mismatches))
+    if failure:
+        lines.append(f"Blocker: {failure}")
+    lines.append("Result: " + ("BLOCKED" if failure else "PASSED"))
+    lines.append("UI acceptance: " + report["ui_acceptance"].upper())
+    lines.append("============================================")
+    summary = "\n".join(lines) + "\n"
+    (report_dir / "summary.txt").write_text(summary, encoding="utf-8")
+    report["summary"] = str(report_dir / "summary.txt")
+    report["test_counts"] = {"categories": categories, "total": totals}
+    print(summary, flush=True)
+
 
 
 def execute(pr, repo):
@@ -121,6 +226,8 @@ def execute(pr, repo):
         profile = override
     report_dir = Path.home() / ".dji-stock-acceptance" / f"pr-{pr}" / sha
     report_dir.mkdir(parents=True, exist_ok=True)
+    for stale in ("tests.log", "ollama-e2e.log", "tests.json", "ollama-e2e.json", "summary.txt"):
+        (report_dir / stale).unlink(missing_ok=True)
     report_path = report_dir / "result.json"
     log_path = report_dir / "tests.log"
     report = {
@@ -147,37 +254,41 @@ def execute(pr, repo):
             report["ui_acceptance"] = "not_applicable"
             report["notes"].append("Documentation-only PR; GitHub Actions CI remains mandatory")
         else:
-            args = [str(python), "-m", "unittest", "discover", "-s", "tests", "-v"]
+            args = [str(python), str(worktree / "scripts/structured_tests.py"), "--suite", "discovery", "--json", str(report_dir / "tests.json")]
             # Redirect Path.home() and temp writes away from ~/DroneStock during tests.
             # This is filesystem path isolation, not an OS-level security sandbox.
             with tempfile.TemporaryDirectory(prefix="dji-accept-home-") as sandbox:
                 env = os.environ.copy()
                 env["HOME"] = sandbox
                 env["TMPDIR"] = sandbox
-                with log_path.open("w", encoding="utf-8") as log:
-                    result = subprocess.run(args, cwd=worktree, env=env, stdout=log,
-                                            stderr=subprocess.STDOUT, timeout=1800)
-                    if result.returncode:
-                        report["checks"]["unittest_discovery"]["status"] = "failed"
-                        raise RuntimeError(f"Local tests failed (exit {result.returncode}); see {log_path}")
-                    if profile == "ai":
-                        ai_env = env.copy()
-                        ai_env["DJI_RUN_OLLAMA_E2E"] = "1"
-                        log.flush()
-                        ai_log_path = report_dir / "ollama-e2e.log"
-                        with ai_log_path.open("w", encoding="utf-8") as ai_log:
-                            result = subprocess.run(
-                                [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
-                                cwd=worktree, env=ai_env, stdout=ai_log,
-                                stderr=subprocess.STDOUT, timeout=3600,
-                            )
-                        ai_output = ai_log_path.read_text(encoding="utf-8")
-                        report["checks"]["ollama_e2e"]["log"] = str(ai_log_path)
-                        try:
-                            verify_ollama_result(ai_output, result.returncode)
-                        except RuntimeError:
-                            report["checks"]["ollama_e2e"]["status"] = "failed"
-                            raise
+                code = run_visible(
+                    args, cwd=worktree, env=env, log_path=log_path,
+                    timeout=1800, label="Unit + real DJI integration",
+                )
+                unit_data = json.loads((report_dir / "tests.json").read_text(encoding="utf-8"))
+                if unit_data.get("skipped") or unit_data.get("skips"):
+                    raise RuntimeError("Uncovered skipped tests: {}".format(unit_data.get("skips")))
+                if unit_data.get("total") != unit_data.get("passed", 0) + unit_data.get("failed", 0):
+                    raise RuntimeError("Inconsistent discovery test totals")
+                if code:
+                    report["checks"]["unittest_discovery"]["status"] = "failed"
+                    raise RuntimeError(f"Local tests failed (exit {code}); see {log_path}")
+                if profile == "ai":
+                    ai_env = env.copy()
+                    ai_env["DJI_RUN_OLLAMA_E2E"] = "1"
+                    ai_log_path = report_dir / "ollama-e2e.log"
+                    code = run_visible(
+                        [str(python), str(worktree / "scripts/structured_tests.py"), "--suite", "ollama", "--json", str(report_dir / "ollama-e2e.json")],
+                        cwd=worktree, env=ai_env, log_path=ai_log_path,
+                        timeout=3600, label="Real Ollama + FFmpeg E2E",
+                    )
+                    ai_output = json.loads((report_dir / "ollama-e2e.json").read_text(encoding="utf-8"))
+                    report["checks"]["ollama_e2e"]["log"] = str(ai_log_path)
+                    try:
+                        verify_ollama_result(ai_output, code)
+                    except RuntimeError:
+                        report["checks"]["ollama_e2e"]["status"] = "failed"
+                        raise
             report["local_tests"] = "passed"
             for name in ("unittest_discovery", "real_dji_opencv", "real_ffmpeg_exiftool"):
                 report["checks"][name]["status"] = "passed"
@@ -188,9 +299,11 @@ def execute(pr, repo):
         report["local_tests"] = "blocked"
         report["checks"]["failure"] = {"status": "blocked", "reason": str(exc)}
         report["error"] = str(exc)
+        print_summary(report, report_dir, failure=str(exc))
         report_path.write_text(json.dumps(report, indent=2) + "\n")
         print(f"ACCEPTANCE BLOCKED: {exc}\nReport: {report_path}", file=sys.stderr)
         return 1
+    print_summary(report, report_dir)
     report_path.write_text(json.dumps(report, indent=2) + "\n")
     print(f"PR #{pr} SHA {sha}\nProfile: {profile}\nReport: {report_path}")
     if profile == "docs":
