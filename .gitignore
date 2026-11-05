@@ -1,5 +1,6 @@
 # Local Python environment and caches
 .venv/
+.venv312/
 venv/
 __pycache__/
 *.py[cod]
@@ -29,6 +30,8 @@ __pycache__/
 /exports/
 *.mp4
 *.MP4
+# Explicitly version the immutable DJI integration fixture
+!tests/fixtures/dji/354022_DJI_0408.MP4
 *.mov
 *.MOV
 
