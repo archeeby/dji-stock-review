@@ -154,11 +154,10 @@ def execute(pr, repo):
                             [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
                             cwd=worktree, env=ai_env, stdout=log, stderr=subprocess.STDOUT, timeout=3600,
                         )
-                                    if result.returncode:
+                        if result.returncode:
                             report["checks"]["ollama_e2e"]["status"] = "failed"
                             raise RuntimeError(f"Ollama E2E failed (exit {result.returncode}); see {log_path}")
-                    else:
-                        report["local_tests"] = "passed"
+            report["local_tests"] = "passed"
             for name in ("unittest_discovery", "real_dji_opencv", "real_ffmpeg_exiftool"):
                 report["checks"][name]["status"] = "passed"
             if profile == "ai":
