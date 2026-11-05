@@ -105,11 +105,19 @@ def execute(pr, repo):
     report_path = report_dir / "result.json"
     log_path = report_dir / "tests.log"
     report = {
+        "schema_version": 2,
         "pr": pr, "head_sha": sha, "profile": profile, "changed_files": changed,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "environment": {"platform": sys.platform, "python": sys.version.split()[0]},
         "local_tests": "pending", "ui_acceptance": "pending",
         "log": str(log_path), "notes": [],
+        "checks": {
+            "unittest_discovery": {"status": "pending" if profile != "docs" else "not_applicable", "reason": "Documentation-only change" if profile == "docs" else None},
+            "real_dji_opencv": {"status": "pending" if profile != "docs" else "not_applicable", "reason": "Included in unittest discovery" if profile != "docs" else "Documentation-only change"},
+            "real_ffmpeg_exiftool": {"status": "pending" if profile != "docs" else "not_applicable", "reason": "Included in unittest discovery" if profile != "docs" else "Documentation-only change"},
+            "ollama_e2e": {"status": "pending" if profile == "ai" else "not_applicable", "reason": None if profile == "ai" else "No AI/pipeline files changed"},
+            "streamlit_preview": {"status": "pending" if profile != "docs" else "not_applicable", "reason": None if profile != "docs" else "Documentation-only change"},
+        },
     }
     try:
         python = find_python(repo)
@@ -140,9 +148,14 @@ def execute(pr, repo):
                         if result.returncode:
                             raise RuntimeError(f"Ollama E2E failed (exit {result.returncode}); see {log_path}")
             report["local_tests"] = "passed"
+            for name in ("unittest_discovery", "real_dji_opencv", "real_ffmpeg_exiftool"):
+                report["checks"][name]["status"] = "passed"
+            if profile == "ai":
+                report["checks"]["ollama_e2e"]["status"] = "passed"
             report["notes"].append("UI acceptance is pending until the human verifies the preview")
     except Exception as exc:
         report["local_tests"] = "blocked"
+        report["checks"]["failure"] = {"status": "blocked", "reason": str(exc)}
         report["error"] = str(exc)
         report_path.write_text(json.dumps(report, indent=2) + "\n")
         print(f"ACCEPTANCE BLOCKED: {exc}\nReport: {report_path}", file=sys.stderr)
@@ -157,13 +170,19 @@ def execute(pr, repo):
                       f"refs/pull/{pr}/head").stdout.split()
     if not current or current[0] != sha:
         report["local_tests"] = "stale"
+        report["checks"]["streamlit_preview"] = {"status": "blocked", "reason": "PR HEAD changed after tests"}
         report["error"] = "PR HEAD changed during local acceptance"
         report_path.write_text(json.dumps(report, indent=2) + "\n")
         print(report["error"], file=sys.stderr)
         return 1
     print("Tests passed. Launching Streamlit; UI acceptance remains manual.")
     print("WARNING: Streamlit preview SHARES ~/DroneStock runtime data. Avoid modifying real records.")
-    return subprocess.call(["bash", str(worktree / "scripts/preview.sh"), str(pr)], cwd=worktree)
+    preview_exit = subprocess.call(["bash", str(worktree / "scripts/preview.sh"), str(pr)], cwd=worktree)
+    report["checks"]["streamlit_preview"] = {"status": "launched" if preview_exit == 0 else "blocked", "reason": "Human UI approval remains pending" if preview_exit == 0 else f"Preview exited with status {preview_exit}"}
+    if preview_exit:
+        report["error"] = f"Streamlit preview failed (exit {preview_exit})"
+    report_path.write_text(json.dumps(report, indent=2) + "\\n")
+    return preview_exit
 
 
 def main():
