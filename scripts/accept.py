@@ -97,6 +97,19 @@ def prerequisites(profile, worktree):
         raise RuntimeError(f"Missing required tools: {', '.join(missing)}")
 
 
+def verify_ollama_result(output, returncode):
+    """Fail closed on skipped/empty/missing E2E even when unittest exits zero."""
+    import re
+    if returncode != 0:
+        raise RuntimeError(f"Ollama E2E process exited {returncode}")
+    if not re.search(r"^test_real_frame_vision_and_stock_metadata .* \.\.\. ok$", output, re.MULTILINE):
+        raise RuntimeError("Required Ollama E2E test did not complete successfully")
+    if not re.search(r"^Ran 1 test in ", output, re.MULTILINE):
+        raise RuntimeError("Expected exactly one Ollama E2E test")
+    if re.search(r"\b(skipped|SKIP|FAILED|ERROR)\b", output):
+        raise RuntimeError("Ollama E2E was skipped or failed")
+
+
 def execute(pr, repo):
     sha, worktree, changed = prepare_worktree(repo, pr)
     profile = classify(changed)
@@ -160,12 +173,11 @@ def execute(pr, repo):
                             )
                         ai_output = ai_log_path.read_text(encoding="utf-8")
                         report["checks"]["ollama_e2e"]["log"] = str(ai_log_path)
-                        if "Ran 1 test" not in ai_output or "skipped" in ai_output.lower() or " ... ok" not in ai_output:
+                        try:
+                            verify_ollama_result(ai_output, result.returncode)
+                        except RuntimeError:
                             report["checks"]["ollama_e2e"]["status"] = "failed"
-                            raise RuntimeError(f"Ollama E2E did not execute exactly one successful test; see {ai_log_path}")
-                        if result.returncode:
-                            report["checks"]["ollama_e2e"]["status"] = "failed"
-                            raise RuntimeError(f"Ollama E2E failed (exit {result.returncode}); see {log_path}")
+                            raise
             report["local_tests"] = "passed"
             for name in ("unittest_discovery", "real_dji_opencv", "real_ffmpeg_exiftool"):
                 report["checks"][name]["status"] = "passed"
@@ -196,7 +208,9 @@ def execute(pr, repo):
         return 1
     print("Tests passed. Launching Streamlit; UI acceptance remains manual.")
     print("WARNING: Streamlit preview SHARES ~/DroneStock runtime data. Avoid modifying real records.")
-    preview_exit = subprocess.call(["bash", str(worktree / "scripts/preview.sh"), str(pr)], cwd=worktree)
+    preview_env = os.environ.copy()
+    preview_env["DJI_EXPECTED_PR_SHA"] = sha
+    preview_exit = subprocess.call(["bash", str(worktree / "scripts/preview.sh"), str(pr)], cwd=worktree, env=preview_env)
     report["checks"]["streamlit_preview"] = {"status": "launched" if preview_exit == 0 else "blocked", "reason": "Human UI approval remains pending" if preview_exit == 0 else f"Preview exited with status {preview_exit}"}
     if preview_exit:
         report["error"] = f"Streamlit preview failed (exit {preview_exit})"
