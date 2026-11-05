@@ -11,6 +11,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 
 
 AI_PATHS = (
@@ -120,18 +121,24 @@ def execute(pr, repo):
             args = [str(python), "-m", "unittest", "discover", "-s", "tests", "-v"]
             if profile == "ai":
                 args += []  # AI E2E is invoked separately below, after the normal suite.
-            with log_path.open("w", encoding="utf-8") as log:
-                result = subprocess.run(args, cwd=worktree, stdout=log,
-                                        stderr=subprocess.STDOUT, timeout=1800)
-                if result.returncode:
-                    raise RuntimeError(f"Local tests failed (exit {result.returncode}); see {log_path}")
-                if profile == "ai":
-                    result = subprocess.run(
-                        [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
-                        cwd=worktree, stdout=log, stderr=subprocess.STDOUT, timeout=3600,
-                    )
+            # Redirect Path.home() and temp writes away from ~/DroneStock during tests.
+            # This is filesystem path isolation, not an OS-level security sandbox.
+            with tempfile.TemporaryDirectory(prefix="dji-accept-home-") as sandbox:
+                env = os.environ.copy()
+                env["HOME"] = sandbox
+                env["TMPDIR"] = sandbox
+                with log_path.open("w", encoding="utf-8") as log:
+                    result = subprocess.run(args, cwd=worktree, env=env, stdout=log,
+                                            stderr=subprocess.STDOUT, timeout=1800)
                     if result.returncode:
-                        raise RuntimeError(f"Ollama E2E failed (exit {result.returncode}); see {log_path}")
+                        raise RuntimeError(f"Local tests failed (exit {result.returncode}); see {log_path}")
+                    if profile == "ai":
+                        result = subprocess.run(
+                            [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
+                            cwd=worktree, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=3600,
+                        )
+                        if result.returncode:
+                            raise RuntimeError(f"Ollama E2E failed (exit {result.returncode}); see {log_path}")
             report["local_tests"] = "passed"
             report["notes"].append("UI acceptance is pending until the human verifies the preview")
     except Exception as exc:
