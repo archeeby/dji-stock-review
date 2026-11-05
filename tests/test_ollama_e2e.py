@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 import urllib.request
+from unittest.mock import patch
 
 from tests.test_real_dji_motion import FIXTURE, FIXTURE_SHA256, sha256
 
@@ -72,6 +73,60 @@ class RealOllamaE2E(unittest.TestCase):
             self.assertTrue(0 < len(fields["title"].strip()) <= 100)
             self.assertTrue(0 < len(fields["description"].strip()) <= 350)
             self.assertGreaterEqual(len(fields["keywords"]), 8)
+            # Continue the same real-model acceptance test through real FFmpeg.
+            # Approval is simulated; no human clicks or writes to personal data.
+            import export_approved
+            from candidate_reviews import key_for
+            originals = root / "originals"
+            originals.mkdir()
+            copied_source = originals / FIXTURE.name
+            copied_source.write_bytes(FIXTURE.read_bytes())
+            work = root / "metadata" / "videos"
+            folder = "ollama-e2e"
+            workspace = work / folder
+            (workspace / "stock_metadata").mkdir(parents=True)
+            (workspace / "clip_candidates.json").write_text(candidates.read_text())
+            (workspace / "stock_metadata" / "clip_001.json").write_text(target.read_text())
+            key = key_for(FIXTURE.name, "clip_001")
+            review_path = workspace / "reviews.json"
+            output_dir = root / "exports" / "approved"
+            output = output_dir / folder / key
+            sidecar = output.with_name(key + ".source.json")
+
+            def set_status(status):
+                review_path.write_text(json.dumps({key: {"status": status}}))
+
+            def export():
+                with (patch.object(export_approved, "WORK", work),
+                      patch.object(export_approved, "ORIGINALS", originals),
+                      patch.object(export_approved, "DEST", output_dir)):
+                    export_approved.export(folder)
+
+            set_status("approved")
+            export()
+            self.assertTrue(output.is_file())
+            self.assertTrue(sidecar.is_file())
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries",
+                 "format=duration:stream=codec_name", "-of", "json", str(output)],
+                capture_output=True, text=True, check=True, timeout=60,
+            )
+            video = json.loads(probe.stdout)
+            self.assertGreater(float(video["format"]["duration"]), 4.0)
+            self.assertTrue(any(stream.get("codec_name") == "h264"
+                                for stream in video.get("streams", [])))
+            original_output = output.read_bytes()
+            export()  # Unchanged approved export is idempotent.
+            self.assertEqual(output.read_bytes(), original_output)
+            set_status("rejected")
+            export()
+            self.assertFalse(output.exists())
+            self.assertFalse(sidecar.exists())
+            set_status("approved")
+            export()
+            self.assertTrue(output.is_file())
+            self.assertTrue(sidecar.is_file())
+            self.assertEqual(sha256(copied_source), FIXTURE_SHA256)
             self.assertEqual(sha256(FIXTURE), FIXTURE_SHA256)
 
 
