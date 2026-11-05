@@ -64,13 +64,26 @@ class StructuredResult(unittest.TextTestResult):
             self._record(subtest, "failed", self._exc_info_to_string(err, subtest))
 
 
+def exclude_separate_ollama(suite):
+    """Remove only the separately executed real Ollama E2E from discovery."""
+    filtered = unittest.TestSuite()
+    for item in suite:
+        if isinstance(item, unittest.TestSuite):
+            child = exclude_separate_ollama(item)
+            if child.countTestCases():
+                filtered.addTest(child)
+        elif item.id() != "tests.test_ollama_e2e.RealOllamaE2E.test_real_frame_vision_and_stock_metadata":
+            filtered.addTest(item)
+    return filtered
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", required=True)
     parser.add_argument("--suite", choices=("discovery", "ollama"), required=True)
     args = parser.parse_args()
     target = Path(args.json)
-    suite = (unittest.defaultTestLoader.discover("tests") if args.suite == "discovery"
+    suite = (exclude_separate_ollama(unittest.defaultTestLoader.discover("tests")) if args.suite == "discovery"
              else unittest.defaultTestLoader.loadTestsFromName("tests.test_ollama_e2e"))
     runner = unittest.TextTestRunner(verbosity=2, resultclass=StructuredResult)
     started = time.monotonic()
@@ -86,6 +99,7 @@ def main():
             "skipped": len(result.skipped),
             "tests": records,
             "successful": result.wasSuccessful(),
+            "skips": [{"id": str(test), "reason": reason} for test, reason in result.skipped],
         }
         target.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         return 0 if report["successful"] else 1
