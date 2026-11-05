@@ -29,3 +29,11 @@ def valid_trim(start, end, duration):
     return (all(math.isfinite(v) for v in (start, end, duration))
             and 0 <= start and end <= duration
             and end - start >= MIN_CLIP_SECONDS - 1e-9)
+
+
+def adjust_trim_end(start, end, duration, delta):
+    """Move only the End boundary, clamping to 5s minimum and source duration."""
+    a, b = normalize_trim(start, end, duration)
+    maximum = editor_duration(duration)
+    desired = max(a + MIN_CLIP_SECONDS, min(maximum, b + delta))
+    return normalize_trim(a, desired, duration, changed="end")[1]
