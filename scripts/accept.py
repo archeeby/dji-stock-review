@@ -181,7 +181,7 @@ def execute(pr, repo):
     report["checks"]["streamlit_preview"] = {"status": "launched" if preview_exit == 0 else "blocked", "reason": "Human UI approval remains pending" if preview_exit == 0 else f"Preview exited with status {preview_exit}"}
     if preview_exit:
         report["error"] = f"Streamlit preview failed (exit {preview_exit})"
-    report_path.write_text(json.dumps(report, indent=2) + "\\n")
+    report_path.write_text(json.dumps(report, indent=2) + "\n")
     return preview_exit
 
 
