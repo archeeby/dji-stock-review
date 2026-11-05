@@ -181,7 +181,7 @@ if st.session_state.queue_index not in visible:
 with jump_col:
     # Synchronize the widget with navigation before rendering it.
     st.session_state["queue_selection"] = st.session_state.queue_index
-    current_index = st.selectbox("Clip", visible, index=visible.index(st.session_state.queue_index),
+    current_index = st.selectbox("Clip", visible,
         format_func=lambda i: f"{i+1}/{len(queue)} · {queue[i][2]} · {queue[i][1]} · {status_label(statuses[i])}",
         key="queue_selection",
         on_change=lambda: st.session_state.update(queue_index=st.session_state.queue_selection))
