@@ -65,13 +65,13 @@ class AcceptanceProfileTests(unittest.TestCase):
 
 
     def test_ollama_result_requires_real_success(self):
-        output = ("test_real_frame_vision_and_stock_metadata (tests.test_ollama_e2e.RealOllamaE2E.test_real_frame_vision_and_stock_metadata) ... ok\\n"
-                  "----------------------------------------------------------------------\\nRan 1 test in 8.12s\\n\\nOK\\n")
+        output = ("test_real_frame_vision_and_stock_metadata (tests.test_ollama_e2e.RealOllamaE2E.test_real_frame_vision_and_stock_metadata) ... ok\n"
+                  "----------------------------------------------------------------------\nRan 1 test in 8.12s\n\nOK\n")
         accept.verify_ollama_result(output, 0)
 
     def test_skipped_ollama_is_rejected_even_with_exit_zero(self):
-        output = ("setUpClass (tests.test_ollama_e2e.RealOllamaE2E) ... skipped 'opt-in'\\n"
-                  "----------------------------------------------------------------------\\nRan 0 tests in 0.000s\\n\\nOK (skipped=1)\\n")
+        output = ("setUpClass (tests.test_ollama_e2e.RealOllamaE2E) ... skipped 'opt-in'\n"
+                  "----------------------------------------------------------------------\nRan 0 tests in 0.000s\n\nOK (skipped=1)\n")
         with self.assertRaises(RuntimeError):
             accept.verify_ollama_result(output, 0)
 
