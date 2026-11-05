@@ -18,6 +18,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install real-video test tools (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg libimage-exiftool-perl
+      - name: Install real-video test tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg exiftool
       - name: Install package
         run: python -m pip install -e .
       - name: Compile sources
