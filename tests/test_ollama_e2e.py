@@ -34,7 +34,7 @@ class RealOllamaE2E(unittest.TestCase):
             root = Path(tmp)
             candidates = root / "clip_candidates.json"
             clip = {"id": "clip_001", "start": 0.0, "end": 5.0, "duration": 5.0}
-            candidates.write_text(json.dumps({"source": FIXTURE.name, "clips": [clip]}))
+            candidates.write_text(json.dumps({"source": FIXTURE.name, "duration": 5.0, "clips": [clip]}))
             analysis_dir = root / "vision"
             metadata_dir = root / "metadata"
             env = os.environ.copy()
