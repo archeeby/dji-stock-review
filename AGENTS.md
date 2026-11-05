@@ -49,6 +49,18 @@ The human owner may describe tasks conversationally or by voice. A spoken reques
 
 **Roles:** The planning assistant acts as technical discussion partner and coordinates design and review; the implementer writes code; an independent agent reviews; the human owner approves significant plans and merges. Voice is an input method, not a shortcut around design or human approval.
 
+## Mandatory agent delivery and merge gate (MUST FOLLOW)
+- Minimize human effort: agent owns Issue creation, scoped implementation branch, Draft PR, tests, independent review, failure triage, preview instructions, merge execution after approval, post-merge checks and Issue closure when fully complete. Human involvement is limited to significant design approval, relevant acceptance, and explicit final merge authorization.
+- Every implementation must be tracked in a GitHub Issue and developed via a separate branch and Draft PR. Discuss and obtain approval before substantial or risky implementation; routine in-scope implementation and CI fixes do not require repeated human confirmation.
+- Before asking for merge permission AND immediately before merging, fetch the latest PR HEAD SHA and verify all applicable GitHub Actions jobs/checks for that exact SHA are completed successfully. Do not rely on a previous commit, a green badge on another branch, or a partial success. Check all required matrix jobs, not just the workflow's existence.
+- If checks are queued or running, wait and recheck. If any check fails, times out, is cancelled, is missing, or its status cannot be verified, **DO NOT MERGE**. Tell the human which check failed or is unavailable, investigate and fix when possible, push changes, and wait for fresh green CI.
+- If the PR HEAD changes after validation, invalidate previous evidence and recheck CI, review, and affected acceptance for the new SHA.
+- A green CI is necessary but insufficient. Independent review and relevant human local acceptance must be recorded; docs/test-only changes may mark UI acceptance N/A with a reason.
+- **NEVER MERGE WITHOUT EXPLICIT HUMAN APPROVAL FOR THAT PR.** Approval of a plan, successful tests, or an earlier PR is not merge authorization. Never use auto-merge as a workaround.
+- Default to GitHub **Create a merge commit** (not squash or rebase) to preserve branch ancestry. Deviations require explicit human agreement.
+- After merging, inspect post-merge main CI and report any failures; close the linked Issue only if its full acceptance criteria are met. Do not claim a successful post-merge CI before it finishes.
+- GitHub branch protection is not currently configured; these rules remain mandatory for all agents regardless.
+
 ## Test integrity and failure triage
 Tests exist to verify **real, agreed user behavior**, not to make CI green. Never weaken, delete, skip, rewrite assertions, alter fixtures, or increase mocks solely to make a failing test pass.
 
