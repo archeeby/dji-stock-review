@@ -17,7 +17,12 @@ st.markdown("""<style>
 .block-container {max-width:100% !important;padding:3.6rem 0.85rem 1.2rem !important}
 [data-testid="stVerticalBlock"] {gap:.26rem}
 /* Keep both main columns top-aligned. */
-[data-testid="stHorizontalBlock"] {align-items:flex-start}
+[data-testid="stHorizontalBlock"] {align-items:stretch}
+/* Bottom-align navigation and trim buttons with adjacent input widgets. */
+div.st-key-review_navigation [data-testid="stHorizontalBlock"],
+div.st-key-trim_controls [data-testid="stHorizontalBlock"] {align-items:flex-end !important}
+div.st-key-review_navigation .stButton,
+div.st-key-trim_controls .stButton {margin-bottom:0}
 [data-testid="stWidgetLabel"] p {font-size:.75rem}
 .stButton button {min-height:2.05rem;padding:.22rem .6rem}
 .stTextArea textarea {min-height:54px}
@@ -145,7 +150,9 @@ if "queue_index" not in st.session_state:
 if "queue_filter" not in st.session_state:
     st.session_state.queue_filter = "Pending"
 
-filter_col, jump_col, prev_col, next_col = st.columns([1.2, 3.6, .6, .6], gap="small", vertical_alignment="bottom")
+navigation = st.container(key="review_navigation")
+with navigation:
+    filter_col, jump_col, prev_col, next_col = st.columns([1.2, 3.6, .6, .6], gap="small", vertical_alignment="bottom")
 with filter_col:
     st.selectbox("Status", ["Pending", "All", "Approved", "Rejected"], key="queue_filter")
 visible = [i for i, status in enumerate(statuses)
@@ -174,7 +181,7 @@ if st.session_state.queue_index not in visible:
 with jump_col:
     # Synchronize the widget with navigation before rendering it.
     st.session_state["queue_selection"] = st.session_state.queue_index
-    current_index = st.selectbox("Clip", visible, index=visible.index(st.session_state.queue_index),
+    current_index = st.selectbox("Clip", visible,
         format_func=lambda i: f"{i+1}/{len(queue)} · {queue[i][2]} · {queue[i][1]} · {status_label(statuses[i])}",
         key="queue_selection",
         on_change=lambda: st.session_state.update(queue_index=st.session_state.queue_selection))
@@ -241,6 +248,13 @@ def normalize_editor(changed=None):
     st.session_state[end_key] = b
 
 
+def adjust_end(delta):
+    """Adjust only End, keeping Start fixed and enforcing valid bounds."""
+    from trim_bounds import adjust_trim_end
+    st.session_state[end_key] = adjust_trim_end(
+        st.session_state[start_key], st.session_state[end_key], duration, delta)
+
+
 def reset_trim():
     a, b = normalize_trim(clip["start"], clip["end"], duration)
     st.session_state.update({start_key: a, end_key: b})
@@ -268,7 +282,8 @@ with left:
                 if preview_valid:
                     try:
                         st.video(preview_clip(str(original), original.stat().st_mtime_ns,
-                                              preview_start, preview_end), format="video/mp4")
+                                              preview_start, preview_end), format="video/mp4",
+                                 autoplay=True)
                     except (subprocess.CalledProcessError, ValueError) as exc:
                         st.error(f"Preview failed: {exc}")
                 else:
@@ -278,7 +293,10 @@ with left:
                 st.caption("Full original")
                 st.video(str(original), start_time=int(preview_start))
         st.caption(f"Preview: {preview_start:.2f}–{preview_end:.2f}s · {preview_end-preview_start:.2f}s · {record.get('location', 'Unknown location')}")
-        start_col, end_col, reset_col = st.columns([1, 1, .6], gap="small", vertical_alignment="bottom")
+        trim_controls = st.container(key="trim_controls")
+        with trim_controls:
+            start_col, end_col, minus_col, plus_col, reset_col = st.columns(
+                [1, 1, .38, .38, .65], gap="small", vertical_alignment="bottom")
         with start_col:
             st.number_input("Start (s)", min_value=0.0, max_value=trim_max, step=0.1,
                             format="%.2f", key=start_key,
@@ -289,6 +307,14 @@ with left:
                             on_change=normalize_editor, args=("end",))
         start, end = float(st.session_state[start_key]), float(st.session_state[end_key])
         valid = valid_trim(start, end, duration)
+        with minus_col:
+            st.button("−", key=f"trim_minus:{identity}", use_container_width=True,
+                      disabled=end <= start + MIN_CLIP_SECONDS + 1e-9,
+                      help="Shorten by 1 second", on_click=adjust_end, args=(-1.0,))
+        with plus_col:
+            st.button("+", key=f"trim_plus:{identity}", use_container_width=True,
+                      disabled=end >= trim_max - 1e-9,
+                      help="Extend by 1 second", on_click=adjust_end, args=(1.0,))
         with reset_col:
             st.button("Reset", help="Restore original AI-generated clip boundaries", use_container_width=True,
                       on_click=reset_trim)
