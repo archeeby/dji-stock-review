@@ -8,10 +8,21 @@
 ## Simple agent-led lifecycle
 1. **Issue + plan.** Agent clarifies requirements and inspects code; human approves substantial/risky implementation plans.
 2. **Draft PR.** Agent implements on a branch, writes tests, documents changes, and opens a Draft PR linked to the Issue.
-3. **Automated checks + independent agent review.** Agent investigates failures, fixes code, reruns CI, and reports gaps. CI green alone is not acceptance.
+3. **Automated checks + independent agent review.** Agent investigates failures, fixes code, reruns CI, and reports gaps. All applicable CI jobs must finish successfully on the latest PR HEAD SHA; CI green alone is not acceptance.
 4. **Local acceptance.** Human opens the exact PR version with `bash scripts/preview.sh <PR-number>`, checks the relevant UI/user journeys, and reports pass/fail. For test-only or docs-only PRs, record why manual UI verification is not applicable.
-5. **Human merge approval.** Only after CI, review and acceptance does the human explicitly authorize merging. Agents must not infer authorization from a green check, an approved design, or a comment that tests passed.
-6. **Merge and close.** After authorization, squash-merge into `main`, check post-merge CI, and close the linked Issue only if all acceptance criteria are fulfilled. Use `Fixes #N` only when the PR fully resolves the Issue; otherwise use `Refs #N` and keep it open.
+5. **Human merge approval.** Only after verified green CI on the latest HEAD, independent review and applicable local acceptance does the human explicitly authorize merging this PR. Agents must not infer authorization from a green check, an approved design, or a comment that tests passed.
+6. **Merge and close.** Immediately before merge, re-fetch the PR HEAD and revalidate CI for that SHA. After authorization, use **Create a merge commit** into `main` by default (not squash/rebase), check post-merge CI, and close the linked Issue only if all acceptance criteria are fulfilled. Use `Fixes #N` only when the PR fully resolves the Issue; otherwise use `Refs #N` and keep it open.
+
+## Strict CI merge gate — no exceptions
+1. Fetch the current PR HEAD commit SHA and the status of **every applicable GitHub Actions job**, including every required OS/Python matrix job. Verify checks are associated with that SHA, have completed, and all have a successful conclusion. Do not mistake a successful subset for an overall pass.
+2. If any check is queued/in progress, **wait and poll again**. If a check failed, timed out, was cancelled, is missing, or its status cannot be verified, **block merge**. Tell the owner exactly which checks failed or are pending. Investigate and fix failures without weakening tests to obtain green CI; rerun on a new SHA.
+3. Recheck the HEAD SHA and CI immediately before the actual merge operation. If the SHA changed, previous validation and any affected acceptance are stale: repeat them.
+4. No agent may merge without the owner's **explicit authorization for this particular PR**, even with green CI and accepted UI. No auto-merge or bypass. A design approval is not merge approval.
+5. After merge, verify and report post-merge CI on `main`. If it fails, report failure and investigate; never claim post-merge success while checks are running.
+6. Branch protection is deferred; agents must enforce these instructions even when GitHub would technically allow merging.
+
+## Human involvement is intentionally minimal
+The agent handles Issue, branch, Draft PR, implementation, tests, review, failure resolution, preview instructions, merge after permission, and follow-up. The owner only approves substantial/risky plans, performs relevant local acceptance (or accepts a documented N/A), and explicitly authorizes each merge. Default merge strategy is **Create a merge commit** to preserve ancestry for parallel/dependent branches.
 
 **Close without merge** rejects a PR's changes; it is not the normal completion path.
 
