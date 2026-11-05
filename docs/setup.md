@@ -101,6 +101,8 @@ The UI requires generated candidate metadata. GPS reverse-geocoding may make net
 
 ## 5. Tests
 
+For the three testing levels (unit/component, lightweight real-video integration, and heavy AI/manual E2E), prerequisites, CI coverage, and safe local commands, see **[Testing strategy and execution](testing.md)**.
+
 ```bash
 python -m unittest discover -s tests -v
 ```
