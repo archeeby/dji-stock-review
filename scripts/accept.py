@@ -73,19 +73,21 @@ def find_python(repo):
     for path in (repo / ".venv312/bin/python", repo / ".venv/bin/python"):
         if path.is_file():
             result = subprocess.run([str(path), "-c",
-                "import sys, streamlit; assert sys.version_info >= (3, 11)"],
+                "import sys, streamlit; assert sys.version_info[:2] == (3, 12)"],
                 capture_output=True)
             if result.returncode == 0:
                 return path
-    raise RuntimeError("Missing Python >=3.11 with Streamlit in .venv312 or .venv")
+    raise RuntimeError("Missing Python 3.12 with Streamlit in .venv312 or .venv")
 
 
 def prerequisites(profile, worktree):
     required = []
-    if profile in ("media", "ai"):
+    if profile != "docs":
+        # The default unittest discovery always executes real DJI media tests.
         required = ["ffmpeg", "ffprobe", "exiftool"]
-        if not (worktree / "tests/test_real_dji_tools.py").is_file():
-            raise RuntimeError("Required real FFmpeg/ExifTool integration tests are not present")
+        for test in ("tests/test_real_dji_tools.py", "tests/test_real_dji_motion.py"):
+            if not (worktree / test).is_file():
+                raise RuntimeError(f"Required real media integration test is not present: {test}")
     if profile == "ai":
         if not (worktree / "tests/test_ollama_e2e.py").is_file():
             raise RuntimeError("Required isolated Ollama E2E test is not implemented; merge blocked")
@@ -119,8 +121,6 @@ def execute(pr, repo):
             report["notes"].append("Documentation-only PR; GitHub Actions CI remains mandatory")
         else:
             args = [str(python), "-m", "unittest", "discover", "-s", "tests", "-v"]
-            if profile == "ai":
-                args += []  # AI E2E is invoked separately below, after the normal suite.
             # Redirect Path.home() and temp writes away from ~/DroneStock during tests.
             # This is filesystem path isolation, not an OS-level security sandbox.
             with tempfile.TemporaryDirectory(prefix="dji-accept-home-") as sandbox:
