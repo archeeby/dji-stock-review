@@ -10,10 +10,13 @@ Refs #
 - [ ] HEAD and CI rechecked immediately before merge (repeat if new commits appear)
 - [ ] Agent/code review completed; findings resolved
 
-## Local acceptance
-- [ ] Preview opened with `bash scripts/preview.sh <PR-number>` (or N/A with reason)
-- [ ] Acceptance criteria checked; shared-data changes understood
+## Local acceptance (integration/E2E + preview)
+- [ ] Applicable local integration/E2E test matrix selected and documented (or N/A with reason)
+- [ ] All **required** local tests passed for the recorded PR HEAD SHA (or N/A with reason); environment/logs/results recorded
+- [ ] Preview/user journeys checked via `bash scripts/preview.sh <PR-number>` (or N/A with reason); shared-data risks understood
+- [ ] No required local test is failed, missing or unverified; affected checks repeated after new commits
 - [ ] Known gaps and test evidence recorded
+<!-- Future: one-command `bash scripts/accept.sh <PR-number>` is planned but NOT yet implemented. -->
 
 ## Merge gate
 - [ ] Human owner explicitly authorized **this PR's** merge
