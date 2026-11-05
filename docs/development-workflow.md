@@ -9,7 +9,7 @@
 1. **Issue + plan.** Agent clarifies requirements and inspects code; human approves substantial/risky implementation plans.
 2. **Draft PR.** Agent implements on a branch, writes tests, documents changes, and opens a Draft PR linked to the Issue.
 3. **Automated checks + independent agent review.** Agent investigates failures, fixes code, reruns CI, and reports gaps. All applicable CI jobs must finish successfully on the latest PR HEAD SHA; CI green alone is not acceptance.
-4. **Local acceptance.** Human opens the exact PR version with `bash scripts/preview.sh <PR-number>`, checks the relevant UI/user journeys, and reports pass/fail. For test-only or docs-only PRs, record why manual UI verification is not applicable.
+4. **Local acceptance (one human touchpoint).** Agent selects required local integration/E2E checks for the PR. Human runs them and the relevant Streamlit preview in one acceptance session, checks user journeys, and reports pass/fail. The planned single command is `bash scripts/accept.sh <PR-number>`; **it does not exist yet**. Until implemented, agent provides explicit commands for local tests and `bash scripts/preview.sh <PR-number>`. For docs-only/test-only PRs, record N/A for inapplicable checks and UI verification.
 5. **Human merge approval.** Only after verified green CI on the latest HEAD, independent review and applicable local acceptance does the human explicitly authorize merging this PR. Agents must not infer authorization from a green check, an approved design, or a comment that tests passed.
 6. **Merge and close.** Immediately before merge, re-fetch the PR HEAD and revalidate CI for that SHA. After authorization, use **Create a merge commit** into `main` by default (not squash/rebase), check post-merge CI, and close the linked Issue only if all acceptance criteria are fulfilled. Use `Fixes #N` only when the PR fully resolves the Issue; otherwise use `Refs #N` and keep it open.
 
@@ -25,6 +25,13 @@
 The agent handles Issue, branch, Draft PR, implementation, tests, review, failure resolution, preview instructions, merge after permission, and follow-up. The owner only approves substantial/risky plans, performs relevant local acceptance (or accepts a documented N/A), and explicitly authorizes each merge. Default merge strategy is **Create a merge commit** to preserve ancestry for parallel/dependent branches.
 
 **Close without merge** rejects a PR's changes; it is not the normal completion path.
+
+## Local integration/E2E acceptance policy
+- CI should automatically run unit and feasible lightweight real-media integration checks. The agent chooses additional local tests based on affected behavior: FFmpeg/OpenCV/ExifTool and representative real footage for video-processing changes; Ollama E2E for AI/pipeline changes; no heavyweight Ollama for unrelated docs/UI PRs.
+- The planned `scripts/accept.sh <PR-number>` will fetch the exact PR HEAD, verify local prerequisites, run only applicable integration/E2E tests in isolated temporary directories, record SHA/results/logs, and start Streamlit preview **only after required local tests pass**. Implement it separately; until then this is a specification, not an available command.
+- Local tests must not mutate originals, existing AI metadata, or user review/export data. Existing preview is not isolated and shares real runtime directories; avoid destructive acceptance actions and disclose that limitation.
+- Required local tests are a merge gate alongside CI, independent review, applicable manual acceptance, and explicit owner approval. Failed, missing, or unverified required local tests block merge. Altering the required test scope requires explicit owner agreement. New PR commits invalidate affected acceptance/test evidence.
+- Record the applicable test matrix and any N/A rationale in the PR. UI acceptance can be N/A for docs/test-only PRs.
 
 ## Local PR preview (macOS)
 Run from the main checkout at `~/DroneStock`:
