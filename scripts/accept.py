@@ -104,7 +104,7 @@ def verify_ollama_result(data, returncode):
     """Verify a real named Ollama test from structured unittest results."""
     if returncode != 0 or not data.get("successful"):
         raise RuntimeError("Ollama E2E process failed")
-    if data.get("total") != 1 or data.get("failed") or data.get("skipped"):
+    if data.get("total") != 1 or data.get("failed") or data.get("skipped") or data.get("skips"):
         raise RuntimeError("Expected exactly one successful, unskipped Ollama E2E test")
     tests = data.get("tests", [])
     if len(tests) != 1 or tests[0].get("status") != "passed" or not tests[0].get("id", "").endswith(".test_real_frame_vision_and_stock_metadata"):
@@ -172,6 +172,7 @@ def summarize_log(path, label):
         "skipped": data["skipped"],
         "failed_tests": [t["id"] for t in data["tests"] if t["status"] == "failed"],
         "count_mismatch": data["total"] != data["passed"] + data["failed"] + data["skipped"],
+        "skips": data.get("skips", []),
     }
 
 
@@ -195,9 +196,12 @@ def print_summary(report, report_dir, failure=None):
     lines.append(f"{'TOTAL':<25} {totals['passed']:>6} {totals['failed']:>6} {totals['skipped']:>7} {totals['total']:>6}")
     failures = [f"{row['category']}: {name}" for row in categories for name in row["failed_tests"]]
     lines.append("Failed tests: " + ("None" if not failures else "\n  " + "\n  ".join(failures)))
+    for row in categories:
+        for skip in row["skips"]:
+            lines.append("Skipped: {}: {} — {}".format(row["category"], skip["id"], skip["reason"]))
     mismatches = [row["category"] for row in categories if row["count_mismatch"]]
     if mismatches:
-        lines.append("Warning: verbose test count mismatch: " + ", ".join(mismatches))
+        lines.append("Warning: structured test count mismatch: " + ", ".join(mismatches))
     if failure:
         lines.append(f"Blocker: {failure}")
     lines.append("Result: " + ("BLOCKED" if failure else "PASSED"))
@@ -261,6 +265,11 @@ def execute(pr, repo):
                     args, cwd=worktree, env=env, log_path=log_path,
                     timeout=1800, label="Unit + real DJI integration",
                 )
+                unit_data = json.loads((report_dir / "tests.json").read_text(encoding="utf-8"))
+                if unit_data.get("skipped") or unit_data.get("skips"):
+                    raise RuntimeError("Uncovered skipped tests: {}".format(unit_data.get("skips")))
+                if unit_data.get("total") != unit_data.get("passed", 0) + unit_data.get("failed", 0):
+                    raise RuntimeError("Inconsistent discovery test totals")
                 if code:
                     report["checks"]["unittest_discovery"]["status"] = "failed"
                     raise RuntimeError(f"Local tests failed (exit {code}); see {log_path}")
