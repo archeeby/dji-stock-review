@@ -100,17 +100,15 @@ def prerequisites(profile, worktree):
         raise RuntimeError(f"Missing required tools: {', '.join(missing)}")
 
 
-def verify_ollama_result(output, returncode):
-    """Require one successful, unskipped named Ollama test."""
-    if returncode != 0:
-        raise RuntimeError(f"Ollama E2E process exited {returncode}")
-    if not re.search(r"test_real_frame_vision_and_stock_metadata.*?\.\.\.\s*ok\b", output):
-        raise RuntimeError("Required Ollama E2E test did not complete successfully")
-    if not re.search(r"^Ran 1 test in ", output, re.MULTILINE):
-        raise RuntimeError("Expected exactly one Ollama E2E test")
-    if not re.search(r"^OK\s*$", output, re.MULTILINE):
-        raise RuntimeError("Ollama E2E was skipped or failed")
-
+def verify_ollama_result(data, returncode):
+    """Verify a real named Ollama test from structured unittest results."""
+    if returncode != 0 or not data.get("successful"):
+        raise RuntimeError("Ollama E2E process failed")
+    if data.get("total") != 1 or data.get("failed") or data.get("skipped"):
+        raise RuntimeError("Expected exactly one successful, unskipped Ollama E2E test")
+    tests = data.get("tests", [])
+    if len(tests) != 1 or tests[0].get("status") != "passed" or not tests[0].get("id", "").endswith(".test_real_frame_vision_and_stock_metadata"):
+        raise RuntimeError("Required real Ollama E2E test not confirmed by structured results")
 
 
 def run_visible(args, *, cwd, env, log_path, timeout, label):
@@ -164,39 +162,23 @@ def run_visible(args, *, cwd, env, log_path, timeout, label):
 
 
 def summarize_log(path, label):
-    """Use unittest's authoritative total; flag unrecognized verbose lines."""
-    output = path.read_text(encoding="utf-8", errors="replace")
-    rows = []
-    for line in output.splitlines():
-        match = re.match(
-            r"^\s*(test\S+.*?)\s+\.\.\.\s+"
-            r"(ok|FAIL|ERROR|skipped.*|expected failure|unexpected success)\s*$", line
-        )
-        if match:
-            outcome = match.group(2)
-            status = ("passed" if outcome in ("ok", "expected failure")
-                      else "skipped" if outcome.startswith("skipped")
-                      else "failed")
-            rows.append((match.group(1), status))
-    totals = re.findall(r"^Ran (\d+) tests? in ", output, re.MULTILINE)
-    total = int(totals[-1]) if totals else len(rows)
-    skip_match = re.search(r"^OK \(skipped=(\d+)\)", output, re.MULTILINE)
-    skipped = max(sum(status == "skipped" for _, status in rows),
-                  int(skip_match.group(1)) if skip_match else 0)
-    failed = sum(status == "failed" for _, status in rows)
+    """Read canonical JSON produced by StructuredResult, never console text."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema_version") != 1 or "tests" not in data:
+        raise RuntimeError(f"Invalid structured test report: {path}")
     return {
-        "category": label, "total": total,
-        "passed": max(0, total - failed - skipped),
-        "failed": failed, "skipped": skipped,
-        "failed_tests": [name for name, status in rows if status == "failed"],
-        "count_mismatch": len(rows) != total,
+        "category": label, "total": data["total"],
+        "passed": data["passed"], "failed": data["failed"],
+        "skipped": data["skipped"],
+        "failed_tests": [t["id"] for t in data["tests"] if t["status"] == "failed"],
+        "count_mismatch": data["total"] != data["passed"] + data["failed"] + data["skipped"],
     }
 
 
 def print_summary(report, report_dir, failure=None):
     categories = []
-    for filename, label in (("tests.log", "Unit & DJI integration"),
-                            ("ollama-e2e.log", "Real Ollama E2E")):
+    for filename, label in (("tests.json", "Unit & DJI integration"),
+                            ("ollama-e2e.json", "Real Ollama E2E")):
         path = report_dir / filename
         if path.exists():
             categories.append(summarize_log(path, label))
@@ -240,7 +222,7 @@ def execute(pr, repo):
         profile = override
     report_dir = Path.home() / ".dji-stock-acceptance" / f"pr-{pr}" / sha
     report_dir.mkdir(parents=True, exist_ok=True)
-    for stale in ("tests.log", "ollama-e2e.log", "summary.txt"):
+    for stale in ("tests.log", "ollama-e2e.log", "tests.json", "ollama-e2e.json", "summary.txt"):
         (report_dir / stale).unlink(missing_ok=True)
     report_path = report_dir / "result.json"
     log_path = report_dir / "tests.log"
@@ -268,7 +250,7 @@ def execute(pr, repo):
             report["ui_acceptance"] = "not_applicable"
             report["notes"].append("Documentation-only PR; GitHub Actions CI remains mandatory")
         else:
-            args = [str(python), "-m", "unittest", "discover", "-s", "tests", "-v"]
+            args = [str(python), str(worktree / "scripts/structured_tests.py"), "--suite", "discovery", "--json", str(report_dir / "tests.json")]
             # Redirect Path.home() and temp writes away from ~/DroneStock during tests.
             # This is filesystem path isolation, not an OS-level security sandbox.
             with tempfile.TemporaryDirectory(prefix="dji-accept-home-") as sandbox:
@@ -287,11 +269,11 @@ def execute(pr, repo):
                     ai_env["DJI_RUN_OLLAMA_E2E"] = "1"
                     ai_log_path = report_dir / "ollama-e2e.log"
                     code = run_visible(
-                        [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
+                        [str(python), str(worktree / "scripts/structured_tests.py"), "--suite", "ollama", "--json", str(report_dir / "ollama-e2e.json")],
                         cwd=worktree, env=ai_env, log_path=ai_log_path,
                         timeout=3600, label="Real Ollama + FFmpeg E2E",
                     )
-                    ai_output = ai_log_path.read_text(encoding="utf-8")
+                    ai_output = json.loads((report_dir / "ollama-e2e.json").read_text(encoding="utf-8"))
                     report["checks"]["ollama_e2e"]["log"] = str(ai_log_path)
                     try:
                         verify_ollama_result(ai_output, code)
