@@ -11,6 +11,9 @@ spec.loader.exec_module(accept)
 
 
 class AcceptanceProfileTests(unittest.TestCase):
+    def test_real_ollama_test_is_opt_in(self):
+        self.assertEqual(accept.classify(["tests/test_ollama_e2e.py"]), "ai")
+
     def test_docs_only_is_not_a_local_test_requirement(self):
         self.assertEqual(accept.classify(["docs/testing.md", "README.md"]), "docs")
 
