@@ -91,7 +91,8 @@ class RealDjiToolsIntegrationTests(unittest.TestCase):
                 self.assertAlmostEqual(float(details["format"]["duration"]), 5.0, delta=0.6)
                 self.assertEqual(run_tool("ffmpeg", "-v", "error", "-i", str(target),
                                           "-f", "null", "-"), "")
-                rows = list(csv.DictReader((dest / folder / "approved_metadata.csv").open()))
+                with (dest / folder / "approved_metadata.csv").open(newline="", encoding="utf-8") as csv_stream:
+                    rows = list(csv.DictReader(csv_stream))
                 self.assertEqual(len(rows), 1)
                 self.assertEqual(rows[0]["Filename"], key)
                 first_hash = sha256(target)
