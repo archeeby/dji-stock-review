@@ -49,6 +49,26 @@ The human owner may describe tasks conversationally or by voice. A spoken reques
 
 **Roles:** The planning assistant acts as technical discussion partner and coordinates design and review; the implementer writes code; an independent agent reviews; the human owner approves significant plans and merges. Voice is an input method, not a shortcut around design or human approval.
 
+## Mandatory agent delivery and merge gate (MUST FOLLOW)
+- Minimize human effort: agent owns Issue creation, scoped implementation branch, Draft PR, tests, independent review, failure triage, preview instructions, merge execution after approval, post-merge checks and Issue closure when fully complete. Human involvement is limited to significant design approval, relevant acceptance, and explicit final merge authorization.
+- Every implementation must be tracked in a GitHub Issue and developed via a separate branch and Draft PR. Discuss and obtain approval before substantial or risky implementation; routine in-scope implementation and CI fixes do not require repeated human confirmation.
+- Before asking for merge permission AND immediately before merging, fetch the latest PR HEAD SHA and verify all applicable GitHub Actions jobs/checks for that exact SHA are completed successfully. Do not rely on a previous commit, a green badge on another branch, or a partial success. Check all required matrix jobs, not just the workflow's existence.
+- If checks are queued or running, wait and recheck. If any check fails, times out, is cancelled, is missing, or its status cannot be verified, **DO NOT MERGE**. Tell the human which check failed or is unavailable, investigate and fix when possible, push changes, and wait for fresh green CI.
+- If the PR HEAD changes after validation, invalidate previous evidence and recheck CI, review, and affected acceptance for the new SHA.
+- A green CI is necessary but insufficient. Independent review and relevant human local acceptance must be recorded; docs/test-only changes may mark UI acceptance N/A with a reason.
+- **NEVER MERGE WITHOUT EXPLICIT HUMAN APPROVAL FOR THAT PR.** Approval of a plan, successful tests, or an earlier PR is not merge authorization. Never use auto-merge as a workaround.
+- Default to GitHub **Create a merge commit** (not squash or rebase) to preserve branch ancestry. Deviations require explicit human agreement.
+- After merging, inspect post-merge main CI and report any failures; close the linked Issue only if its full acceptance criteria are met. Do not claim a successful post-merge CI before it finishes.
+- GitHub branch protection is not currently configured; these rules remain mandatory for all agents regardless.
+
+## Local acceptance gate (MUST FOLLOW)
+- Local acceptance is **one human touchpoint**, combining applicable local integration/end-to-end checks and manual UI acceptance. The intended command is `bash scripts/accept.sh <PR-number>` (not yet implemented; see its tracking Issue). Until available, provide explicit separate test and `bash scripts/preview.sh <PR-number>` instructions without claiming the combined command works.
+- The agent determines and documents the applicable local test matrix for each PR: routine unit/lightweight real-media integration tests should run in CI where practical; local macOS tests are for checks requiring actual FFmpeg/ExifTool/real-media or Ollama models not available in CI. Do not run heavyweight Ollama E2E for unrelated docs/UI changes.
+- Applicable required local integration/E2E checks must pass before requesting merge authorization. If they fail, are missing, or have not run, **do not merge**; report the blocker and resolve it. Any change to what counts as required needs explicit agreement with the owner, not a silent skip.
+- Local tests must use isolated temporary input/output data and never modify the user's originals, existing AI metadata, or production review/export state. The existing Streamlit preview shares live runtime data; clearly warn about this until preview isolation is implemented.
+- Record test names, actual outcomes, environment, logs/report location, and tested PR HEAD SHA. A new HEAD invalidates affected test/acceptance evidence; rerun before merge.
+- For docs-only/test-only changes, explicitly document N/A for manual UI acceptance and for any inapplicable heavyweight tests. Human approval to merge remains a separate, explicit gate.
+
 ## Test integrity and failure triage
 Tests exist to verify **real, agreed user behavior**, not to make CI green. Never weaken, delete, skip, rewrite assertions, alter fixtures, or increase mocks solely to make a failing test pass.
 
