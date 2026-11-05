@@ -4,6 +4,8 @@ Usage: python scripts/accept.py PR_NUMBER
 A successful automated test run is NOT human UI approval.
 """
 import argparse
+import threading
+import time
 from datetime import datetime, timezone
 import json
 import os
@@ -110,6 +112,56 @@ def verify_ollama_result(output, returncode):
         raise RuntimeError("Ollama E2E was skipped or failed")
 
 
+
+def run_visible(args, *, cwd, env, log_path, timeout, label):
+    """Stream test output live, retain full logs, and report long-running tests."""
+    started = time.monotonic()
+    last_output = [started]
+    stop = threading.Event()
+    print(f"[RUN] {label}: {' '.join(args[-4:])}", flush=True)
+
+    def heartbeat():
+        while not stop.wait(15):
+            elapsed = int(time.monotonic() - started)
+            silent = int(time.monotonic() - last_output[0])
+            print(f"[WAIT] {label}: {elapsed}s elapsed, {silent}s since last output", flush=True)
+
+    monitor = threading.Thread(target=heartbeat, daemon=True)
+    monitor.start()
+    process = None
+    try:
+        with log_path.open("w", encoding="utf-8") as log:
+            process = subprocess.Popen(
+                args, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, bufsize=1,
+            )
+            def pump():
+                for line in process.stdout:
+                    log.write(line)
+                    log.flush()
+                    last_output[0] = time.monotonic()
+                    print(line, end="", flush=True)
+
+            reader = threading.Thread(target=pump, daemon=True)
+            reader.start()
+            process.wait(timeout=timeout)
+            reader.join(timeout=10)
+            if reader.is_alive():
+                raise RuntimeError(f"{label}: output reader did not finish")
+            code = process.returncode
+    except subprocess.TimeoutExpired as exc:
+        if process is not None:
+            process.kill()
+            process.wait()
+        raise RuntimeError(f"{label} timed out after {timeout}s; see {log_path}") from exc
+    finally:
+        stop.set()
+        monitor.join(timeout=2)
+    elapsed = time.monotonic() - started
+    print(f"[{'PASS' if code == 0 else 'FAIL'}] {label}: {elapsed:.1f}s; log: {log_path}", flush=True)
+    return code
+
+
 def execute(pr, repo):
     sha, worktree, changed = prepare_worktree(repo, pr)
     profile = classify(changed)
@@ -154,30 +206,29 @@ def execute(pr, repo):
                 env = os.environ.copy()
                 env["HOME"] = sandbox
                 env["TMPDIR"] = sandbox
-                with log_path.open("w", encoding="utf-8") as log:
-                    result = subprocess.run(args, cwd=worktree, env=env, stdout=log,
-                                            stderr=subprocess.STDOUT, timeout=1800)
-                    if result.returncode:
-                        report["checks"]["unittest_discovery"]["status"] = "failed"
-                        raise RuntimeError(f"Local tests failed (exit {result.returncode}); see {log_path}")
-                    if profile == "ai":
-                        ai_env = env.copy()
-                        ai_env["DJI_RUN_OLLAMA_E2E"] = "1"
-                        log.flush()
-                        ai_log_path = report_dir / "ollama-e2e.log"
-                        with ai_log_path.open("w", encoding="utf-8") as ai_log:
-                            result = subprocess.run(
-                                [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
-                                cwd=worktree, env=ai_env, stdout=ai_log,
-                                stderr=subprocess.STDOUT, timeout=3600,
-                            )
-                        ai_output = ai_log_path.read_text(encoding="utf-8")
-                        report["checks"]["ollama_e2e"]["log"] = str(ai_log_path)
-                        try:
-                            verify_ollama_result(ai_output, result.returncode)
-                        except RuntimeError:
-                            report["checks"]["ollama_e2e"]["status"] = "failed"
-                            raise
+                code = run_visible(
+                    args, cwd=worktree, env=env, log_path=log_path,
+                    timeout=1800, label="Unit + real DJI integration",
+                )
+                if code:
+                    report["checks"]["unittest_discovery"]["status"] = "failed"
+                    raise RuntimeError(f"Local tests failed (exit {code}); see {log_path}")
+                if profile == "ai":
+                    ai_env = env.copy()
+                    ai_env["DJI_RUN_OLLAMA_E2E"] = "1"
+                    ai_log_path = report_dir / "ollama-e2e.log"
+                    code = run_visible(
+                        [str(python), "-m", "unittest", "tests.test_ollama_e2e", "-v"],
+                        cwd=worktree, env=ai_env, log_path=ai_log_path,
+                        timeout=3600, label="Real Ollama + FFmpeg E2E",
+                    )
+                    ai_output = ai_log_path.read_text(encoding="utf-8")
+                    report["checks"]["ollama_e2e"]["log"] = str(ai_log_path)
+                    try:
+                        verify_ollama_result(ai_output, code)
+                    except RuntimeError:
+                        report["checks"]["ollama_e2e"]["status"] = "failed"
+                        raise
             report["local_tests"] = "passed"
             for name in ("unittest_discovery", "real_dji_opencv", "real_ffmpeg_exiftool"):
                 report["checks"][name]["status"] = "passed"
