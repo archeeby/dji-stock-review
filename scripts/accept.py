@@ -101,15 +101,14 @@ def prerequisites(profile, worktree):
 
 
 def verify_ollama_result(output, returncode):
-    """Fail closed on skipped/empty/missing E2E even when unittest exits zero."""
-    import re
+    """Require one successful, unskipped named Ollama test."""
     if returncode != 0:
         raise RuntimeError(f"Ollama E2E process exited {returncode}")
-    if not re.search(r"^test_real_frame_vision_and_stock_metadata .* \.\.\. ok$", output, re.MULTILINE):
+    if not re.search(r"test_real_frame_vision_and_stock_metadata.*?\.\.\.\s*ok\b", output):
         raise RuntimeError("Required Ollama E2E test did not complete successfully")
     if not re.search(r"^Ran 1 test in ", output, re.MULTILINE):
         raise RuntimeError("Expected exactly one Ollama E2E test")
-    if re.search(r"\b(skipped|SKIP|FAILED|ERROR)\b", output):
+    if not re.search(r"^OK\s*$", output, re.MULTILINE):
         raise RuntimeError("Ollama E2E was skipped or failed")
 
 
@@ -165,23 +164,32 @@ def run_visible(args, *, cwd, env, log_path, timeout, label):
 
 
 def summarize_log(path, label):
-    """Count verbose unittest outcomes; keep discovery and E2E disjoint."""
+    """Use unittest's authoritative total; flag unrecognized verbose lines."""
+    output = path.read_text(encoding="utf-8", errors="replace")
     rows = []
-    if path.exists():
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            match = re.match(r"^(test\S+ \(.*?\)) \.\.\. (ok|FAIL|ERROR|skipped .*|expected failure|unexpected success)$", line)
-            if match:
-                outcome = match.group(2)
-                status = ("passed" if outcome in ("ok", "expected failure")
-                          else "skipped" if outcome.startswith("skipped")
-                          else "failed")
-                rows.append((match.group(1), status))
+    for line in output.splitlines():
+        match = re.match(
+            r"^\s*(test\S+.*?)\s+\.\.\.\s+"
+            r"(ok|FAIL|ERROR|skipped.*|expected failure|unexpected success)\s*$", line
+        )
+        if match:
+            outcome = match.group(2)
+            status = ("passed" if outcome in ("ok", "expected failure")
+                      else "skipped" if outcome.startswith("skipped")
+                      else "failed")
+            rows.append((match.group(1), status))
+    totals = re.findall(r"^Ran (\d+) tests? in ", output, re.MULTILINE)
+    total = int(totals[-1]) if totals else len(rows)
+    skip_match = re.search(r"^OK \(skipped=(\d+)\)", output, re.MULTILINE)
+    skipped = max(sum(status == "skipped" for _, status in rows),
+                  int(skip_match.group(1)) if skip_match else 0)
+    failed = sum(status == "failed" for _, status in rows)
     return {
-        "category": label, "total": len(rows),
-        "passed": sum(status == "passed" for _, status in rows),
-        "failed": sum(status == "failed" for _, status in rows),
-        "skipped": sum(status == "skipped" for _, status in rows),
+        "category": label, "total": total,
+        "passed": max(0, total - failed - skipped),
+        "failed": failed, "skipped": skipped,
         "failed_tests": [name for name, status in rows if status == "failed"],
+        "count_mismatch": len(rows) != total,
     }
 
 
@@ -205,6 +213,9 @@ def print_summary(report, report_dir, failure=None):
     lines.append(f"{'TOTAL':<25} {totals['passed']:>6} {totals['failed']:>6} {totals['skipped']:>7} {totals['total']:>6}")
     failures = [f"{row['category']}: {name}" for row in categories for name in row["failed_tests"]]
     lines.append("Failed tests: " + ("None" if not failures else "\n  " + "\n  ".join(failures)))
+    mismatches = [row["category"] for row in categories if row["count_mismatch"]]
+    if mismatches:
+        lines.append("Warning: verbose test count mismatch: " + ", ".join(mismatches))
     if failure:
         lines.append(f"Blocker: {failure}")
     lines.append("Result: " + ("BLOCKED" if failure else "PASSED"))
