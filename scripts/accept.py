@@ -73,7 +73,7 @@ def prepare_worktree(repo, pr):
 
 
 def find_python(repo):
-    for path in (repo / ".venv312/bin/python", repo / ".venv/bin/python"):
+    for path in (repo.parent / ".venv312/bin/python", repo.parent / ".venv/bin/python"):
         if path.is_file():
             result = subprocess.run([str(path), "-c",
                 "import sys, streamlit; assert sys.version_info[:2] == (3, 12)"],
@@ -337,9 +337,9 @@ def main():
     args = parser.parse_args()
     if args.pr <= 0:
         parser.error("PR number must be positive")
-    repo = Path.home() / "DroneStock"
+    repo = Path.home() / "DroneStock" / "dji-stock-review"
     if not (repo / ".git").exists():
-        parser.error("Main checkout not found at ~/DroneStock")
+        parser.error("Main checkout not found at ~/DroneStock/dji-stock-review")
     return execute(args.pr, repo)
 
 
