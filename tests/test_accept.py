@@ -97,6 +97,16 @@ class AcceptanceProfileTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "Required Ollama models missing"):
                     RealOllamaE2E.setUpClass()
 
+    def test_acceptance_uses_nested_checkout_and_workspace_venv(self):
+        runner = MODULE.read_text()
+        accept_shell = (MODULE.parent / "accept.sh").read_text()
+        preview_shell = (MODULE.parent / "preview.sh").read_text()
+        self.assertIn('repo = Path.home() / "DroneStock" / "dji-stock-review"', runner)
+        self.assertIn('repo.parent / ".venv312/bin/python"', runner)
+        for script in (accept_shell, preview_shell):
+            self.assertIn('repo="$HOME/DroneStock/dji-stock-review"', script)
+            self.assertIn('"$HOME/DroneStock/.venv312/bin/python"', script)
+
     def test_preview_script_enforces_expected_sha(self):
         script = (MODULE.parent / "preview.sh").read_text()
         self.assertIn('DJI_EXPECTED_PR_SHA', script)
