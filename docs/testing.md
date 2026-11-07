@@ -122,6 +122,8 @@ Never merge solely because one local test passed. Review all required CI checks 
 
 ## Issue #8: one-command SHA-bound PR acceptance
 
+The Git checkout is now `~/DroneStock/dji-stock-review`; local Python environments remain under `~/DroneStock/.venv312` or `.venv`. Run the commands below from the nested checkout.
+
 Run from the main checkout on macOS with the Python 3.12 virtualenv, FFmpeg, FFprobe, and ExifTool installed:
 
 ```bash
@@ -148,7 +150,7 @@ The accepted PR head was `922de7e3`; local AI-profile acceptance reported **102/
 For a new open PR, use:
 
 ```bash
-cd ~/DroneStock
+cd ~/DroneStock/dji-stock-review
 DJI_ACCEPT_PROFILE=ai bash scripts/accept.sh <PR-number>
 ```
 

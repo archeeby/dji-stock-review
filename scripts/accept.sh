@@ -6,7 +6,7 @@ if [[ $# -ne 1 || ! "$1" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 pr="$1"
-repo="$HOME/DroneStock"
+repo="$HOME/DroneStock/dji-stock-review"
 target="$HOME/.dji-stock-previews/pr-$pr"
 [[ -d "$repo/.git" ]] || { echo "Missing repository: $repo" >&2; exit 1; }
 git -C "$repo" fetch --no-tags origin "pull/$pr/head"
@@ -20,7 +20,7 @@ else
   git -C "$repo" worktree add --detach "$target" "$sha"
 fi
 [[ -f "$target/scripts/accept.py" ]] || { echo "PR runner missing" >&2; exit 1; }
-for python in "$repo/.venv312/bin/python" "$repo/.venv/bin/python"; do
+for python in "$HOME/DroneStock/.venv312/bin/python" "$HOME/DroneStock/.venv/bin/python"; do
   if [[ -x "$python" ]]; then
     echo "Bootstrapped PR #$pr at $sha; running PR-owned acceptance runner"
     exec "$python" "$target/scripts/accept.py" "$pr"

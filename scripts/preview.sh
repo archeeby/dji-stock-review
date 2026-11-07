@@ -14,14 +14,14 @@ if (( port > 65535 )); then
   exit 2
 fi
 
-repo="$HOME/DroneStock"
+repo="$HOME/DroneStock/dji-stock-review"
 if [[ ! -d "$repo/.git" ]]; then
-  echo "Main checkout not found at ~/DroneStock (required by hardcoded application data paths)." >&2
+  echo "Main checkout not found at ~/DroneStock/dji-stock-review." >&2
   exit 1
 fi
 
 python=""
-for candidate in "$repo/.venv312/bin/python" "$repo/.venv/bin/python"; do
+for candidate in "$HOME/DroneStock/.venv312/bin/python" "$HOME/DroneStock/.venv/bin/python"; do
   if [[ -x "$candidate" ]] && "$candidate" -c 'import sys, streamlit; assert sys.version_info >= (3, 11)' >/dev/null 2>&1; then
     python="$candidate"
     break
