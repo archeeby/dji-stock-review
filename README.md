@@ -25,10 +25,10 @@ Local-first pipeline for turning DJI drone footage into stock-footage candidates
 See [setup](docs/setup.md) for prerequisites, Ollama models, and verified vs. unverified platform support.
 
 ```bash
-python -m streamlit run review_app.py
+./scripts/start-review.sh
 ```
 
-The application expects the repository and data directories at `~/DroneStock` and will not display candidates until processing output exists. This path is currently hardcoded; relocation support is planned.
+The application uses `~/DroneStock` as its data workspace and `~/DroneStock/dji-stock-review` as its Git repository. Data paths are currently hardcoded; relocation support is planned.
 
 ## Platform status
 
@@ -36,3 +36,27 @@ The application expects the repository and data directories at `~/DroneStock` an
 - Ubuntu Linux x86_64: **target platform, not yet validated**. Cross-platform CI, dependency locking, and health-monitoring refactoring are planned.
 
 No original videos, generated metadata, exports, or model weights are included in this repository.
+
+## Local workspace layout
+
+The Git repository is located inside the DroneStock workspace:
+
+    ~/DroneStock/
+      dji-stock-review/   Git repository and application
+      originals/          Original DJI footage
+      metadata/           Analysis and manual reviews
+      exports/            Approved clips and stock metadata
+      previews/           Generated previews
+      covers/             Generated covers
+      platforms/          Platform-specific data
+      experiments/        Experimental exports
+      reports/            Analysis reports
+      logs/               Processing logs
+      backups/            Local backups
+      archive/            Archived files
+
+Python environments (.venv and .venv312) currently live
+in the workspace root.
+
+Original videos, metadata, exports, and backups are not
+stored in Git.
