@@ -1,6 +1,6 @@
 # Workspace relocation verification — 2026-11-08
 
-**Status: migration incomplete. Real Ollama acceptance is blocked by this session’s localhost networking restriction; see the follow-up below.**
+**Status: relocation accepted on 2026-11-08.** Final structured discovery passed (116/116, no skips), and the real Ollama E2E passed on the host Mac after final review (1/1, no errors or skips). The agent sandbox's localhost restriction affected only its own attempts; those failures are retained below as historical evidence.
 
 Root cause: runtime modules used `Path.home() / "DroneStock"`, while data moved to the parent of the nested checkout. Subprocesses also incorrectly looked for Python scripts in the workspace root. Absolute source paths were embedded in metadata folder hashes and export sidecars.
 
@@ -26,11 +26,11 @@ macOS ARM64 / Python 3.12.16 validation:
 - Shell syntax and `git diff --check` passed. Final source/test/doc diff reviewed, including independent agent review.
 - Before/after inventories matched for all protected originals, metadata and approved exports: file names, sizes and nanosecond modification times; additionally SHA-256 for metadata and sidecars. Large production MP4s were not fully hashed.
 
-A live HTTP launch check reached Streamlit but socket binding was blocked by the agent sandbox (`PermissionError: Operation not permitted`). Browser playback remains unverified here; AppTest covers app loading, with preview bytes stubbed. Ollama E2E was not run. PR fetching/acceptance was not run against live data. Preview UI actions still act on the configured workspace. No commit was created.
+A live HTTP launch check reached Streamlit but socket binding was blocked by the agent sandbox (`PermissionError: Operation not permitted`). Browser playback remains unverified here; AppTest covers app loading, with preview bytes stubbed. Ollama E2E could not run in the agent sandbox; it subsequently passed on the host Mac as documented below. PR fetching/acceptance was not run against live data. Preview UI actions still act on the configured workspace. No commit was created.
 
 Temporary evidence: `/tmp/drone-tests-final.log`, `/tmp/drone-relocation-tests.log`, `/tmp/drone-readonly.log`, `/tmp/drone-streamlit.log`, `/tmp/drone-inventory-before.json`, `/tmp/drone-inventory-after.json`.
 
-## Real AI acceptance follow-up — migration remains incomplete
+## Real AI acceptance — completed on host Mac
 
 The original committed acceptance configuration (`git show HEAD:scripts/accept.py` and `git show HEAD:tests/test_ollama_e2e.py`) selected the `ai` profile for AI/pipeline changes, or through `DJI_ACCEPT_PROFILE=ai bash scripts/accept.sh <PR-number>`. The runner ran structured discovery first, then set `DJI_RUN_OLLAMA_E2E=1` and executed `scripts/structured_tests.py --suite ollama`. That suite requires exactly one named successful, unskipped test. Hosted CI intentionally does not enable real Ollama.
 
@@ -82,9 +82,9 @@ The server command was launched and monitored by Python `subprocess.Popen`, with
 | Shell syntax / diff whitespace | Passed |
 | Protected production data inventory | Unchanged: 496 original MP4s, all metadata, 179 approved MP4s |
 
-`ollama list` and real E2E setup fail when connecting to `127.0.0.1:11434` with `Operation not permitted`. Streamlit fails with the same sandbox restriction when binding its socket. This session's permission profile cannot grant shell/network escalation. No mock was substituted to turn these failures into passes. Independent review found no material data-safety blocker; the requested AI acceptance remains blocked.
+`ollama list` and real E2E setup fail when connecting to `127.0.0.1:11434` with `Operation not permitted`. Streamlit fails with the same sandbox restriction when binding its socket. This session's permission profile cannot grant shell/network escalation. No mock was substituted to turn these failures into passes. Independent review found no material data-safety blocker; the sandbox's AI acceptance attempt remained blocked; the later host Mac run passed.
 
-The PR-fetch/worktree wrapper was not executed: it would validate committed remote PR code rather than these uncommitted working-tree changes. No commit or PR was created. Run the final isolated real-AI command above in a local terminal with access to Ollama to unblock validation; it must report one passed test and zero skips/errors before AI acceptance can pass. Browser HTTP access also remains unverified here. The AI test covers the individual vision, metadata and export CLIs; it does not claim a real-model `run_pipeline.py`/`run_batch.py` orchestration run. Batch resume/orchestration regression coverage uses the existing explicitly fake pipeline.
+The PR-fetch/worktree wrapper was not executed: it would validate committed remote PR code rather than these uncommitted working-tree changes. No commit or PR was created. The required real-AI test was subsequently executed successfully on the host Mac (see final verification below). Browser HTTP access also remains unverified here. The AI test covers the individual vision, metadata and export CLIs; it does not claim a real-model `run_pipeline.py`/`run_batch.py` orchestration run. Batch resume/orchestration regression coverage uses the existing explicitly fake pipeline.
 
 ## Final uncommitted code review
 
@@ -109,8 +109,25 @@ env -u DJI_RUN_OLLAMA_E2E HOME="$task_sandbox" TMPDIR="$task_sandbox" DJI_STOCK_
 
 Result: **116 passed, 0 failed, 0 skipped**, 15.859 seconds. This includes real OpenCV, ExifTool, FFmpeg export, relocated-sidecar reuse and FFmpeg-backed Streamlit AppTest preview checks. An intermediate run had 115 passed and the one fake-fixture failure described above; the final run resolves it. Shell syntax, whitespace diff checks and independent review passed.
 
-A fresh real-AI attempt during final review used the same isolated environment with `DJI_RUN_OLLAMA_E2E=1` and `--suite ollama --json /tmp/drone-final-review-ai.json`; it returned exit 1, zero executed tests, one setup error and zero skips because localhost access is denied. No real model inference is claimed. This remains an acceptance blocker.
+A fresh real-AI attempt during final review used the same isolated environment with `DJI_RUN_OLLAMA_E2E=1` and `--suite ollama --json /tmp/drone-final-review-ai.json`; it returned exit 1, zero executed tests, one setup error and zero skips because localhost access is denied. No real model inference is claimed. This was a sandbox-only blocker, subsequently resolved by running the real test on the host Mac.
 
 Read-only production validation still reports 490 videos / 2,013 candidates and all 179 approved exports current. Five of the six originals without candidate records have historical partial analysis folders, now resolved correctly without writing them; the sixth has no existing folder. Final inventory `/tmp/drone-inventory-reviewed.json` exactly matches `/tmp/drone-inventory-before.json`: all original and approved MP4 names/sizes/mtime values, all metadata files and SHA-256 values, and all sidecars. Large production MP4s were not fully hashed. No production media or metadata was modified.
 
-Code review is complete with no known material code blocker. Hold final acceptance/commit readiness pending one successful real Ollama E2E run in a terminal permitted to access the local server. No commit or push was performed. Historical lookup still scans metadata folders; batch/monitor performance on substantially larger libraries has not been benchmarked.
+Code review found no known material code blocker. The host Mac subsequently passed the required real Ollama E2E test, and the relocation changes were committed and pushed to `main`. The no-commit/no-push statement above describes the earlier agent review session only. Historical lookup still scans metadata folders; batch/monitor performance on substantially larger libraries has not been benchmarked.
+
+## Final host-Mac verification and publication — 2026-11-08
+
+After the final review fixes, the user ran the real, unmocked Ollama E2E in a normal macOS terminal with access to the local Ollama service:
+
+```bash
+cd ~/workspace/DroneStock/dji-stock-review
+DJI_RUN_OLLAMA_E2E=1 ../.venv312/bin/python \
+  scripts/structured_tests.py --suite ollama \
+  --json /tmp/drone-local-ai-final.json
+```
+
+Result: **1 test passed, 0 failures, 0 errors, 0 skips**, in **43.168 seconds** (`test_real_frame_vision_and_stock_metadata`). Installed models included `qwen3-vl:4b` and `qwen3:4b`. The same real E2E had also passed earlier in 41.994 seconds, before the final review fixes. The post-review run is the acceptance evidence for the final code.
+
+Combined final evidence: **116/116 structured discovery tests passed** in the agent environment; **1/1 real Ollama E2E passed** on the host Mac. These are separate test executions, not a claim that a single end-to-end acceptance wrapper ran. The live browser/HTTP Streamlit check was blocked in the agent sandbox and was not independently verified by this host-Mac E2E run; Streamlit AppTest with real FFmpeg preview did pass. A full real-model `run_pipeline.py` / `run_batch.py` orchestration run was not claimed.
+
+The relocation changes were committed and pushed to GitHub `main`; the repository's subsequent published head was verified as `a625b298b6e793c65ef6d96bda7518434a249375` before this documentation update. The historical inventory checks found no production-media or metadata changes. **Relocation acceptance is complete within the tested scope.**
