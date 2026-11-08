@@ -1,5 +1,5 @@
+from workspace_paths import REPO_ROOT, data_root, video_work_dir
 import argparse
-import hashlib
 import json
 import re
 import subprocess
@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 ORIGINALS = ROOT / "originals"
 LOG = ROOT / "metadata" / "batch_results.json"
 
@@ -34,12 +34,7 @@ if args.dry_run:
 
 
 def work_folder(video):
-    video = video.resolve()
-    video_id = (
-        video.stem + "_" +
-        hashlib.sha256(str(video).encode()).hexdigest()[:10]
-    )
-    return ROOT / "metadata" / "videos" / video_id
+    return video_work_dir(video, ROOT)
 
 
 def is_complete(video):
@@ -177,7 +172,7 @@ for index, video in enumerate(videos, 1):
 
     command = [
         sys.executable,
-        str(ROOT / "run_pipeline.py"),
+        str(REPO_ROOT / "run_pipeline.py"),
         str(video)
     ]
     if args.location:

@@ -21,10 +21,10 @@ The word *integration* does not imply AI. The current video integration test exe
 macOS ARM64, including machines with an existing older `.venv`:
 
 ```bash
-cd ~/DroneStock
+cd ~/workspace/DroneStock/dji-stock-review
 brew install python@3.12
-/opt/homebrew/bin/python3.12 -m venv .venv312
-source .venv312/bin/activate
+/opt/homebrew/bin/python3.12 -m venv ../.venv312
+source ../.venv312/bin/activate
 python -m pip install -e .
 python --version
 python -c 'import cv2; print(cv2.__version__)'
@@ -37,8 +37,8 @@ Do **not** overwrite an existing virtual environment or delete personal files to
 All automated tests (unit/component **plus** lightweight real-video integration):
 
 ```bash
-cd ~/DroneStock
-source .venv312/bin/activate
+cd ~/workspace/DroneStock/dji-stock-review
+source ../.venv312/bin/activate
 python -m unittest discover -s tests -v
 ```
 
@@ -88,20 +88,23 @@ Additional prerequisites:
 - A dedicated test video that you have permission to process. Prefer a disposable **copy** of the checked-in fixture, not your only personal original.
 - For GPS resolution, `resolve_location.py` may contact Nominatim; provide a known `--location` to control metadata text, but note that location resolution is attempted before that argument is used.
 
-Example **manual smoke test** in the existing `~/DroneStock` installation:
+Example **manual smoke test** in the existing `~/workspace/DroneStock` installation:
 
 ```bash
-cd ~/DroneStock
-source .venv312/bin/activate
+cd ~/workspace/DroneStock/dji-stock-review
+source ../.venv312/bin/activate
 ollama list
 ollama pull qwen3-vl:4b
 ollama pull qwen3:4b
-mkdir -p originals/ai-smoke
-cp -n tests/fixtures/dji/354022_DJI_0408.MP4 originals/ai-smoke/354022_DJI_0408.MP4
-python run_pipeline.py originals/ai-smoke/354022_DJI_0408.MP4 --location "Unknown"
+export DJI_STOCK_ROOT="$(mktemp -d /tmp/dji-ai-smoke.XXXXXX)"
+mkdir -p "$DJI_STOCK_ROOT/originals"
+cp -n tests/fixtures/dji/354022_DJI_0408.MP4 "$DJI_STOCK_ROOT/originals/354022_DJI_0408.MP4"
+python run_pipeline.py "$DJI_STOCK_ROOT/originals/354022_DJI_0408.MP4" --location "Unknown"
+# Keep the temporary directory for inspection; unset the override before reviewing live data.
+unset DJI_STOCK_ROOT
 ```
 
-**Safety / limitations:** `run_pipeline.py` hardcodes `~/DroneStock` as its data root, creates or reuses output in `metadata/videos/`, and can call Nominatim. This is **not an isolated automated test**; inspect existing outputs and available storage before running it, and never delete or overwrite previous metadata to force a pass. The example uses a separate copy to avoid writing against the committed fixture or personal originals. `cp -n` avoids replacing an existing copy; if one exists, check it before proceeding. No stock MP4 export is performed by `run_pipeline.py`—the program deliberately defers export until manual approval.
+**Safety / limitations:** `run_pipeline.py` uses the repository’s parent (or `DJI_STOCK_ROOT`) as its data root, creates or reuses output in `metadata/videos/`, and can call Nominatim. This is a manual smoke test with temporary data, **not an automated acceptance result**; inspect existing outputs and available storage before running it, and never delete or overwrite previous metadata to force a pass. The example uses a separate copy to avoid writing against the committed fixture or personal originals. `cp -n` avoids replacing an existing copy; if one exists, check it before proceeding. No stock MP4 export is performed by `run_pipeline.py`—the program deliberately defers export until manual approval.
 
 Manual smoke-test acceptance checks: successful process exit; candidate JSON and AI JSON generated for each candidate; stock metadata JSON with title and keywords; source file SHA-256 unchanged. This does **not** establish AI content quality, export correctness, or full end-to-end coverage. Model outputs may vary; validate contracts and quality constraints, not exact generated prose.
 
@@ -122,7 +125,7 @@ Never merge solely because one local test passed. Review all required CI checks 
 
 ## Issue #8: one-command SHA-bound PR acceptance
 
-The Git checkout is now `~/DroneStock/dji-stock-review`; local Python environments remain under `~/DroneStock/.venv312` or `.venv`. Run the commands below from the nested checkout.
+The Git checkout is now `~/workspace/DroneStock/dji-stock-review`; local Python environments remain under `~/workspace/DroneStock/.venv312` or `.venv`. Run the commands below from the nested checkout.
 
 Run from the main checkout on macOS with the Python 3.12 virtualenv, FFmpeg, FFprobe, and ExifTool installed:
 
@@ -150,7 +153,7 @@ The accepted PR head was `922de7e3`; local AI-profile acceptance reported **102/
 For a new open PR, use:
 
 ```bash
-cd ~/DroneStock/dji-stock-review
+cd ~/workspace/DroneStock/dji-stock-review
 DJI_ACCEPT_PROFILE=ai bash scripts/accept.sh <PR-number>
 ```
 

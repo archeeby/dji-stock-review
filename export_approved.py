@@ -1,3 +1,4 @@
+from workspace_paths import data_root, same_export
 import csv
 import hashlib
 import json
@@ -7,7 +8,7 @@ from pathlib import Path
 from candidate_reviews import key_for, get_review, review_status
 from trim_bounds import valid_trim
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 WORK = ROOT / "metadata" / "videos"
 ORIGINALS = ROOT / "originals"
 DEST = ROOT / "exports" / "approved"
@@ -86,7 +87,7 @@ def export(folder):
         }
 
         existing = json.loads(manifest.read_text()) if manifest.exists() else None
-        if target.exists() and existing == spec:
+        if target.exists() and same_export(existing, spec, ORIGINALS.parent):
             print(f"SKIP unchanged: {filename}", flush=True)
         else:
             if target.exists() and existing is None:

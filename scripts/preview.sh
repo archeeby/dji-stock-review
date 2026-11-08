@@ -14,14 +14,17 @@ if (( port > 65535 )); then
   exit 2
 fi
 
-repo="$HOME/DroneStock/dji-stock-review"
-if [[ ! -d "$repo/.git" ]]; then
-  echo "Main checkout not found at ~/DroneStock/dji-stock-review." >&2
+repo="${DJI_STOCK_REPO:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
+export DJI_STOCK_REPO="$repo"
+export DJI_STOCK_ROOT="${DJI_STOCK_ROOT:-$(dirname -- "$repo")}"
+if [[ ! -e "$repo/.git" ]]; then
+  echo "Main checkout not found at $repo." >&2
   exit 1
 fi
 
 python=""
-for candidate in "$HOME/DroneStock/.venv312/bin/python" "$HOME/DroneStock/.venv/bin/python"; do
+repo_workspace="$(dirname -- "$repo")"
+for candidate in "$repo_workspace/.venv312/bin/python" "$repo_workspace/.venv/bin/python" "$repo/.venv312/bin/python" "$repo/.venv/bin/python" "$DJI_STOCK_ROOT/.venv312/bin/python" "$DJI_STOCK_ROOT/.venv/bin/python"; do
   if [[ -x "$candidate" ]] && "$candidate" -c 'import sys, streamlit; assert sys.version_info >= (3, 11)' >/dev/null 2>&1; then
     python="$candidate"
     break
@@ -61,6 +64,6 @@ fi
 
 echo "PR #$pr at $sha"
 echo "Preview: http://localhost:$port"
-echo "Press Ctrl+C to stop. The existing ~/DroneStock data is SHARED and UI actions can modify it."
+echo "Press Ctrl+C to stop. The existing $DJI_STOCK_ROOT data is SHARED and UI actions can modify it."
 cd "$worktree"
 exec "$python" -m streamlit run review_app.py --server.address 127.0.0.1 --server.port "$port" --server.headless true

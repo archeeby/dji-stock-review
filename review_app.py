@@ -1,4 +1,5 @@
 """DJI Stock Review v2 — compact review queue for laptop screens."""
+from workspace_paths import REPO_ROOT, data_root
 import json
 import subprocess
 from pathlib import Path
@@ -8,7 +9,7 @@ from review_navigation import candidate_order, next_after_decision
 from trim_bounds import MIN_CLIP_SECONDS, editor_duration, normalize_trim, valid_trim
 from candidate_reviews import key_for, get_review, review_status, status_label, save_review, undo_review
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 WORK = ROOT / "metadata" / "videos"
 
 st.set_page_config(page_title="DJI Stock Review v2", layout="wide", initial_sidebar_state="collapsed")
@@ -439,7 +440,7 @@ if st.session_state.get("show_export", False):
                         [
                             sys.executable,
                             "-u",
-                            str(ROOT / "export_approved.py"),
+                            str(REPO_ROOT / "export_approved.py"),
                             export_folder.name,
                         ],
                         cwd=str(ROOT),

@@ -48,3 +48,6 @@ __pycache__/
 /platforms/*/upload/
 /platforms/*/*.csv
 /drone_metadata_analysis.zip
+
+# Local IDE project settings
+.idea/

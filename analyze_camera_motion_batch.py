@@ -1,3 +1,4 @@
+from workspace_paths import data_root
 import cv2
 import json
 import numpy as np
@@ -9,7 +10,7 @@ parser.add_argument("video", type=Path)
 parser.add_argument("output", type=Path)
 args = parser.parse_args()
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 VIDEO = args.video.resolve()
 OUTPUT = args.output.resolve()
 

@@ -29,13 +29,14 @@ exiftool -ver
 
 ## 2. Clone and Python environment
 
-The application currently assumes `~/DroneStock`. Clone there until configurable paths are implemented:
+Choose a workspace anywhere. Keep the checkout inside it (or set `DJI_STOCK_ROOT` to an absolute data directory):
 
 ```bash
-git clone git@github.com:archeeby/dji-stock-review.git ~/DroneStock
-cd ~/DroneStock
-/opt/homebrew/bin/python3.12 -m venv .venv
-source .venv/bin/activate
+mkdir -p ~/workspace/DroneStock
+git clone git@github.com:archeeby/dji-stock-review.git ~/workspace/DroneStock/dji-stock-review
+cd ~/workspace/DroneStock/dji-stock-review
+/opt/homebrew/bin/python3.12 -m venv ../.venv
+source ../.venv/bin/activate
 python --version  # expect Python 3.12.x
 python -m pip install --upgrade pip
 ```
@@ -55,12 +56,12 @@ python -c 'import sys, cv2, numpy; print(sys.version); print("OpenCV:", cv2.__ve
 If `.venv` was created with the wrong interpreter, **do not overwrite or delete it without checking its contents**. Use a separate environment instead:
 
 ```bash
-/opt/homebrew/bin/python3.12 -m venv .venv312
-source .venv312/bin/activate
+/opt/homebrew/bin/python3.12 -m venv ../.venv312
+source ../.venv312/bin/activate
 python -m pip install -e .
 ```
 
-`.venv312/` is excluded by `.gitignore`. Do not delete project data or originals.
+Repository-local `.venv312/` is excluded by `.gitignore`; workspace environments are outside this checkout. Launch and acceptance tools search workspace, checkout, then a separate `DJI_STOCK_ROOT` for `.venv312` or `.venv`. Acceptance requires Python 3.12 and Streamlit. Do not delete project data or originals.
 
 ## 3. Ollama (required for full AI processing)
 
@@ -78,10 +79,10 @@ The Python scripts call `http://localhost:11434/api/chat`. Ollama is **not requi
 
 ## 4. Local data and first run
 
-The repository excludes the personal video library and generated output. One explicitly approved, immutable DJI fixture is versioned at `tests/fixtures/dji/354022_DJI_0408.MP4` (original MP4 including GPS/telemetry); do not change it. For full pipeline exploration, place a **copy** of a separate test video under `~/DroneStock/originals/`; never move or alter your only original. For an initial safe check:
+The repository excludes the personal video library and generated output. One explicitly approved, immutable DJI fixture is versioned at `tests/fixtures/dji/354022_DJI_0408.MP4` (original MP4 including GPS/telemetry); do not change it. For full pipeline exploration, place a **copy** of a separate test video under `~/workspace/DroneStock/originals/`; never move or alter your only original. For an initial safe check:
 
 ```bash
-mkdir -p ~/DroneStock/originals
+mkdir -p ~/workspace/DroneStock/originals
 python run_batch.py --dry-run
 ```
 
@@ -125,7 +126,7 @@ The approved fixture has SHA-256 `43ff72ef1f3b7167b71b6672b3694d50e3fc339f38e3a9
 ## 6. Ubuntu caveats and next steps
 
 - `run_batch.py` currently uses macOS-only health monitoring. It handles unavailable commands but does **not** monitor Linux pressure equivalently.
-- Path `~/DroneStock`, Ollama endpoint and model tags are hardcoded.
+- The Ollama endpoint and model tags are hardcoded.
 - GPU acceleration is optional for functionality but may be important for practical performance; CPU-only inference may be slow.
 - A full clean-machine installation, cross-platform CI and end-to-end video processing test are pending.
 

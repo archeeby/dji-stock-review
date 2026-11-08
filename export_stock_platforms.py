@@ -3,12 +3,13 @@
 No video conversion or modification of originals/reviews.
 Verify platform CSV schemas before uploading.
 """
+from workspace_paths import data_root
 
 import argparse
 import csv
 from pathlib import Path
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 
 
 def main():

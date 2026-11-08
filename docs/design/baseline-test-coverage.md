@@ -34,7 +34,7 @@ The matrix identifies representative test modules, **not** a claim that every po
 
 Run local PR acceptance with `DJI_ACCEPT_PROFILE=ai bash scripts/accept.sh <PR-number>` for an open PR; after merge, see [testing instructions](../testing.md) for direct test commands. The runner executes discovery and the separate real Ollama suite; an unexpected skip or inconsistent structured count blocks acceptance. No heavyweight models are downloaded by GitHub-hosted CI.
 
-Automated tests use temporary directories and copied media; the checked-in original fixture is hash-checked. The Streamlit preview **shares** `~/DroneStock` runtime data, so manual acceptance must not change valuable existing records. Filesystem redirection is not a hardened sandbox.
+Automated tests use temporary directories and copied media; the checked-in original fixture is hash-checked. The Streamlit preview **shares** `~/workspace/DroneStock` runtime data, so manual acceptance must not change valuable existing records. Filesystem redirection is not a hardened sandbox.
 
 ## Remaining risks and follow-up
 

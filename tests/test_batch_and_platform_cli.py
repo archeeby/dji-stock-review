@@ -23,7 +23,7 @@ class BatchDiscoveryIntegrationTests(unittest.TestCase):
                 path = originals / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b"discovery only")
-            env = {**os.environ, "HOME": str(home)}
+            env = {**os.environ, "HOME": str(home), "DJI_STOCK_ROOT": str(home / "DroneStock")}
             result = subprocess.run(
                 [sys.executable, str(ROOT / "run_batch.py"), "--dry-run"],
                 cwd=ROOT, env=env, capture_output=True, text=True, timeout=30,
@@ -45,7 +45,7 @@ class BatchDiscoveryIntegrationTests(unittest.TestCase):
                 (originals / name).write_bytes(b"not decoded in dry run")
             result = subprocess.run(
                 [sys.executable, str(ROOT / "run_batch.py"), "--dry-run", "--limit", "1"],
-                cwd=ROOT, env={**os.environ, "HOME": str(home)},
+                cwd=ROOT, env={**os.environ, "HOME": str(home), "DJI_STOCK_ROOT": str(home / "DroneStock")},
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(result.returncode, 0, result.stderr)

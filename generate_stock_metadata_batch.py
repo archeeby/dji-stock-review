@@ -1,3 +1,4 @@
+from workspace_paths import data_root
 import json
 import re
 import sys
@@ -6,7 +7,7 @@ import urllib.request
 from pathlib import Path
 import argparse
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 META = ROOT / "metadata"
 
 parser = argparse.ArgumentParser()

@@ -1,3 +1,4 @@
+from workspace_paths import data_root
 import json
 import math
 import statistics
@@ -10,7 +11,7 @@ parser.add_argument("motion", type=Path)
 parser.add_argument("output", type=Path)
 args = parser.parse_args()
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 META = ROOT / "metadata"
 
 composition = json.loads(

@@ -3,6 +3,7 @@
 Preserves the original exporter behavior.
 No video conversion, AI analysis or metadata modification.
 """
+from workspace_paths import relocated_source
 
 import json
 from pathlib import Path
@@ -73,7 +74,7 @@ def load_records(root):
             if not all(str(review.get(k, '')).strip() for k in ('title', 'description', 'keywords')):
                 print(f'SKIP incomplete metadata: {mp4}')
                 continue
-            source_video = Path(str(manifest.get('source', '')))
+            source_video = relocated_source(str(manifest.get('source', '')), root)
             location = {}
 
             if source_video.is_file():

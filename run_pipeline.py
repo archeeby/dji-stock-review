@@ -1,11 +1,11 @@
+from workspace_paths import REPO_ROOT, data_root, video_work_dir
 import argparse
-import hashlib
 import json
 import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("video", type=Path)
@@ -13,6 +13,9 @@ parser.add_argument("--location", default=None)
 args = parser.parse_args()
 
 video = args.video.resolve()
+if not video.is_file():
+    raise FileNotFoundError(video)
+work = video_work_dir(video, ROOT)
 from resolve_location import resolve_details
 
 try:
@@ -27,14 +30,6 @@ if not args.location:
 
 print(f"Location: {args.location}", flush=True)
 
-if not video.is_file():
-    raise FileNotFoundError(video)
-
-video_id = (
-    video.stem + "_" +
-    hashlib.sha256(str(video).encode()).hexdigest()[:10]
-)
-work = ROOT / "metadata" / "videos" / video_id
 work.mkdir(parents=True, exist_ok=True)
 
 motion = work / "camera_motion.json"
@@ -44,7 +39,7 @@ ai_dir = work / "ai"
 stock_dir = work / "stock_metadata"
 
 def run(script, *arguments):
-    command = [sys.executable, str(ROOT / script), *map(str, arguments)]
+    command = [sys.executable, str(REPO_ROOT / script), *map(str, arguments)]
     print(f"\nRunning {script}", flush=True)
     subprocess.run(command, check=True)
 

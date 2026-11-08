@@ -1,3 +1,4 @@
+from workspace_paths import data_root
 import base64
 import cv2
 import json
@@ -6,7 +7,7 @@ import urllib.request
 from pathlib import Path
 import argparse
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 META = ROOT / "metadata"
 parser = argparse.ArgumentParser()
 parser.add_argument("candidates", type=Path)

@@ -32,6 +32,7 @@ py-modules = [
   "run_batch",
   "run_pipeline",
   "trim_bounds",
+  "workspace_paths",
 ]
 
 [tool.setuptools.packages.find]

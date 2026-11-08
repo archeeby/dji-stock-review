@@ -14,6 +14,53 @@ class AcceptanceProfileTests(unittest.TestCase):
     def test_real_ollama_test_is_opt_in(self):
         self.assertEqual(accept.classify(["tests/test_ollama_e2e.py"]), "ai")
 
+    def test_relocation_and_acceptance_changes_require_real_ai(self):
+        for path in ("workspace_paths.py", "scripts/accept.py", "scripts/accept.sh",
+                     "scripts/preview.sh", "scripts/start-review.sh", "scripts/structured_tests.py"):
+            with self.subTest(path=path):
+                self.assertEqual(accept.classify([path]), "ai")
+
+    def test_ai_environment_overrides_live_workspace_without_changing_parent(self):
+        import os
+        with patch.dict(os.environ, DJI_STOCK_ROOT="/live/DroneStock",
+                        DJI_RUN_OLLAMA_E2E="1"):
+            for ai in (False, True):
+                env = accept.test_environment("/tmp/relocated fixture", ai=ai)
+                self.assertEqual(env["DJI_STOCK_ROOT"], "/tmp/relocated fixture")
+                self.assertEqual(env["HOME"], "/tmp/relocated fixture")
+                self.assertEqual(env["TMPDIR"], "/tmp/relocated fixture")
+                self.assertEqual(env.get("DJI_RUN_OLLAMA_E2E"), "1" if ai else None)
+            self.assertEqual(os.environ["DJI_STOCK_ROOT"], "/live/DroneStock")
+
+    def test_preview_carries_workspace_across_detached_checkout(self):
+        import os
+        with patch.dict(os.environ):
+            os.environ.pop("DJI_STOCK_ROOT", None)
+            env = accept.preview_environment(Path("/relocated workspace/DroneStock/checkout"), "sha")
+            self.assertEqual(env["DJI_STOCK_ROOT"], "/relocated workspace/DroneStock")
+            self.assertEqual(env["DJI_STOCK_REPO"], "/relocated workspace/DroneStock/checkout")
+            self.assertEqual(env["DJI_EXPECTED_PR_SHA"], "sha")
+        with patch.dict(os.environ, DJI_STOCK_ROOT="/separate data"):
+            self.assertEqual(accept.preview_environment(Path("/checkout"), "sha")["DJI_STOCK_ROOT"], "/separate data")
+
+    def test_python_lookup_uses_workspace_checkout_then_separate_data(self):
+        import tempfile
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "workspace" / "checkout"
+            data = Path(tmp) / "separate data"
+            candidates = [base / ".venv312/bin/python" for base in (repo.parent, repo, data)]
+            for path in candidates:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            with patch.dict("os.environ", DJI_STOCK_ROOT=str(data)):
+                for selected in range(3):
+                    # Stub only interpreter validation; assert actual lookup/fallback order.
+                    results = [SimpleNamespace(returncode=1)] * selected + [SimpleNamespace(returncode=0)]
+                    with patch.object(accept.subprocess, "run", side_effect=results) as run:
+                        self.assertEqual(accept.find_python(repo), candidates[selected])
+                        self.assertEqual([Path(c.args[0][0]) for c in run.call_args_list], candidates[:selected + 1])
+
     def test_docs_only_is_not_a_local_test_requirement(self):
         self.assertEqual(accept.classify(["docs/testing.md", "README.md"]), "docs")
 
@@ -101,11 +148,12 @@ class AcceptanceProfileTests(unittest.TestCase):
         runner = MODULE.read_text()
         accept_shell = (MODULE.parent / "accept.sh").read_text()
         preview_shell = (MODULE.parent / "preview.sh").read_text()
-        self.assertIn('repo = Path.home() / "DroneStock" / "dji-stock-review"', runner)
-        self.assertIn('repo.parent / ".venv312/bin/python"', runner)
+        self.assertIn('DJI_STOCK_REPO', runner)
+        self.assertIn('dict.fromkeys((repo.parent, repo, workspace))', runner)
         for script in (accept_shell, preview_shell):
-            self.assertIn('repo="$HOME/DroneStock/dji-stock-review"', script)
-            self.assertIn('"$HOME/DroneStock/.venv312/bin/python"', script)
+            self.assertIn('BASH_SOURCE[0]', script)
+            self.assertIn('export DJI_STOCK_ROOT=', script)
+            self.assertIn('"$DJI_STOCK_ROOT/.venv312/bin/python"', script)
 
     def test_preview_script_enforces_expected_sha(self):
         script = (MODULE.parent / "preview.sh").read_text()
@@ -114,7 +162,7 @@ class AcceptanceProfileTests(unittest.TestCase):
 
     def test_accept_passes_expected_sha_to_preview(self):
         script = MODULE.read_text()
-        self.assertIn('preview_env["DJI_EXPECTED_PR_SHA"] = sha', script)
+        self.assertIn('env["DJI_EXPECTED_PR_SHA"] = sha', script)
 
     def test_profile_override_cannot_downgrade(self):
         # The runner must reject weaker profiles rather than silently skipping tests.

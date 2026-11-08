@@ -37,23 +37,23 @@ The agent handles Issue, branch, Draft PR, implementation, tests, review, failur
 Run from the main checkout after updating `main`:
 
 ```bash
-cd ~/DroneStock
+cd ~/workspace/DroneStock/dji-stock-review
 bash scripts/accept.sh 9
 ```
 
 The command fetches the current PR, runs applicable local tests, writes `~/.dji-stock-acceptance/pr-9/<SHA>/result.json` and `tests.log`, then starts the PR's Streamlit preview if tests pass. It does **not** record manual UI approval; tell the agent whether the UI was accepted. Docs-only PRs mark local checks N/A. If required real-tool or Ollama E2E suites are absent, acceptance blocks until implemented. Check the result SHA against the PR before merge; CI remains a separate mandatory gate.
 
 ## Local PR preview (macOS)
-Run from the main checkout at `~/DroneStock`:
+Run from the main checkout at `~/workspace/DroneStock/dji-stock-review`:
 
 ```bash
-cd ~/DroneStock
+cd ~/workspace/DroneStock/dji-stock-review
 bash scripts/preview.sh 3
 ```
 
 Open **http://localhost:8503**. PR #4 uses port 8504, etc. The script fetches the PR's latest commit into a detached Git worktree at `~/.dji-stock-previews/pr-<number>`, leaves the main checkout untouched, reuses the existing `.venv312` or `.venv` Python environment and local Ollama, and runs Streamlit in the foreground. Press **Ctrl+C** to stop. Repeat the command to refresh the PR version. If the preview worktree has uncommitted changes, the script refuses to overwrite them.
 
-**Important:** preview instances share the existing `~/DroneStock/originals`, `metadata`, `exports`, and other runtime data because application paths are hardcoded. UI decisions (approve/reject/undo/export) can modify real review data. Do not perform destructive actions on valuable records during acceptance; no isolation or automatic cleanup is provided. The script itself never runs batch processing or exports. Local URLs are accessible only on the Mac and only while the process runs.
+**Important:** preview instances share the existing `~/workspace/DroneStock/originals`, `metadata`, `exports`, and other runtime data through the explicit `DJI_STOCK_ROOT` inherited by the preview worktree. UI decisions (approve/reject/undo/export) can modify real review data. Do not perform destructive actions on valuable records during acceptance; no isolation or automatic cleanup is provided. The script itself never runs batch processing or exports. Local URLs are accessible only on the Mac and only while the process runs.
 
 **Prerequisites:** Git, Python >=3.11 in `.venv312` or `.venv`, `pip install -e .`, FFmpeg for video previews, and existing candidate metadata for meaningful UI review. Ollama models are only required for AI processing, not opening the review UI. See `docs/setup.md` and `docs/testing.md`.
 

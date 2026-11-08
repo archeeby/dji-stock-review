@@ -102,7 +102,7 @@ class CandidateReviewTests(unittest.TestCase):
 
     def test_dropdown_navigation_and_actions(self):
         from streamlit.testing.v1 import AppTest
-        script = Path('review_app.py').read_text().replace('ROOT = Path.home() / "DroneStock"', f'ROOT = Path({str(self.root)!r})')
+        script = Path('review_app.py').read_text().replace('ROOT = data_root()', f'ROOT = Path({str(self.root)!r})')
         app_path = self.root / 'test_app.py'
         app_path.write_text(script)
         def button(app, label):
@@ -138,7 +138,7 @@ class CandidateReviewTests(unittest.TestCase):
     def ui(self):
         from streamlit.testing.v1 import AppTest
         script = Path('review_app.py').read_text().replace(
-            'ROOT = Path.home() / "DroneStock"', f'ROOT = Path({str(self.root)!r})')
+            'ROOT = data_root()', f'ROOT = Path({str(self.root)!r})')
         app_path = self.root / 'audit_app.py'
         app_path.write_text(script)
         with patch.object(library_stats, 'WORK', self.work), patch.object(

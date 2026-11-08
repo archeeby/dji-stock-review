@@ -1,11 +1,11 @@
-import hashlib
+from workspace_paths import data_root, video_work_dir
 import json
 import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 ORIGINALS = ROOT / "originals"
 VIDEOS = ROOT / "metadata" / "videos"
 
@@ -25,12 +25,7 @@ def snapshot():
         if not video.is_file() or video.suffix.lower() not in {".mp4", ".mov", ".m4v"}:
             continue
 
-        video = video.resolve()
-        video_id = video.stem + "_" + hashlib.sha256(
-            str(video).encode()
-        ).hexdigest()[:10]
-
-        work = VIDEOS / video_id
+        work = video_work_dir(video, ROOT)
         candidates = work / "clip_candidates.json"
 
         if not candidates.exists():

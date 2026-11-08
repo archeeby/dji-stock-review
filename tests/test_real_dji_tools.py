@@ -6,6 +6,8 @@ All source, metadata and export paths are temporary and patched in-process.
 import csv
 import hashlib
 import json
+import os
+import sys
 from pathlib import Path
 import shutil
 import subprocess
@@ -47,7 +49,7 @@ class RealDjiToolsIntegrationTests(unittest.TestCase):
     def test_real_approved_export_is_playable_idempotent_and_preserves_source(self):
         fixture_before = sha256(FIXTURE)
         with tempfile.TemporaryDirectory(prefix="dji-real-export-") as temp:
-            root = Path(temp)
+            root = Path(temp) / "relocated workspace"
             originals = root / "originals"
             work = root / "metadata" / "videos"
             dest = root / "exports" / "approved"
@@ -98,6 +100,47 @@ class RealDjiToolsIntegrationTests(unittest.TestCase):
                 first_hash = sha256(target)
                 export_approved.export(folder)
                 self.assertEqual(sha256(target), first_hash, "Unchanged export was rewritten")
+                # Simulate the pre-move sidecar, preserving the existing MP4.
+                historical = json.loads(manifest.read_text())
+                historical["source"] = "/old/DroneStock/originals/" + source.name
+                manifest.write_text(json.dumps(historical))
+                manifest_before = manifest.read_bytes()
+                export_mtime = target.stat().st_mtime_ns
+                with patch.object(export_approved.subprocess, "run") as encode:
+                    export_approved.export(folder)
+                    encode.assert_not_called()
+                self.assertEqual(target.stat().st_mtime_ns, export_mtime)
+                self.assertEqual(sha256(target), first_hash)
+                self.assertEqual(manifest.read_bytes(), manifest_before)
+                # Exercise relocation through the real CLI rather than patched globals.
+                repo = Path(__file__).resolve().parents[1]
+                env = dict(os.environ, HOME=str(root), DJI_STOCK_ROOT=str(root),
+                           TMPDIR=str(root), PYTHONPATH=str(repo))
+                cli = subprocess.run(
+                    [sys.executable, str(repo / "export_approved.py"), folder],
+                    cwd=root, env=env, capture_output=True, text=True, timeout=120,
+                )
+                self.assertEqual(cli.returncode, 0, cli.stdout + cli.stderr)
+                self.assertIn("SKIP unchanged", cli.stdout)
+                self.assertEqual(sha256(target), first_hash)
+                self.assertEqual(manifest.read_bytes(), manifest_before)
+                # Real Streamlit app and real FFmpeg preview in disposable data.
+                preview = subprocess.run(
+                    [sys.executable, "-c", """
+import sys
+from streamlit.testing.v1 import AppTest
+app = AppTest.from_file(sys.argv[1]).run(timeout=60)
+assert not app.exception, list(app.exception)
+next(s for s in app.selectbox if s.label == 'Status').select('All').run(timeout=60)
+assert not app.exception, list(app.exception)
+assert not app.error, [e.value for e in app.error]
+assert app.text_input[0].value == 'Real DJI sample'
+assert len(app.get('video')) == 1, 'Real FFmpeg preview video missing'
+""", str(repo / "review_app.py")],
+                    cwd=root, env=env, capture_output=True, text=True, timeout=120,
+                )
+                self.assertEqual(preview.returncode, 0, preview.stdout + preview.stderr)
+
                 self.assertEqual(sha256(source), source_before)
         self.assertEqual(sha256(FIXTURE), fixture_before, "Committed original was modified")
 

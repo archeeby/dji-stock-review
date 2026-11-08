@@ -39,7 +39,7 @@ Both currently use `http://localhost:11434/api/chat` hardcoded. The vision model
 
 `metadata_enrichment.py` uses ExifTool to read DJI embedded telemetry and caches results. Review and export code must never delete or modify source videos or source AI analyses.
 
-Runtime data lives in `~/DroneStock/originals`, `metadata`, and `exports`; these directories are excluded from Git. Intermediate outputs are cached and processing skips existing results under code-specific checks. Do not force regeneration of historical AI analyses without explicit permission.
+Runtime data lives in `~/workspace/DroneStock/originals`, `metadata`, and `exports`; these directories are excluded from Git. Intermediate outputs are cached and processing skips existing results under code-specific checks. Do not force regeneration of historical AI analyses without explicit permission.
 
 ## Dependencies observed
 
@@ -50,7 +50,7 @@ Runtime data lives in `~/DroneStock/originals`, `metadata`, and `exports`; these
 
 ## Current portability and reproducibility gaps
 
-1. Multiple scripts hardcode `Path.home() / "DroneStock"` rather than deriving a configurable project/data root.
+1. Workspace paths use `workspace_paths.py`: checkout parent by default, absolute `DJI_STOCK_ROOT` override for separate data and isolated tests. Historical metadata folders are reused by source name; ambiguous matches stop processing. Export manifests are resolved in memory after relocation without rewriting historical metadata.
 2. `run_batch.py` uses macOS-specific `sysctl kern.thermal_pressure` and `memory_pressure` checks. Their failures are handled, but Ubuntu has no equivalent monitoring and logs may misleadingly imply a health check occurred.
 3. A `pyproject.toml` now declares the three external Python dependencies, but versions are not locked and model digests are not pinned. Installation still needs validation.
 4. The Ollama endpoint and model tags are hardcoded.

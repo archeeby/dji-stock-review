@@ -12,7 +12,8 @@ PIPELINE = """
 import hashlib, json, sys
 from pathlib import Path
 source = Path(sys.argv[1]).resolve()
-root = Path.home() / 'DroneStock'
+import os
+root = Path(os.environ['DJI_STOCK_ROOT'])
 folder = root / 'metadata' / 'videos' / (source.stem + '_' + hashlib.sha256(str(source).encode()).hexdigest()[:10])
 attempts = root / 'attempts.json'
 state = json.loads(attempts.read_text()) if attempts.exists() else {}
@@ -23,8 +24,8 @@ if source.name == 'b.MP4' and state[source.name] == 1:
 folder.mkdir(parents=True, exist_ok=True)
 clip = {'id': 'auto_01', 'start': 0, 'end': 5}
 (folder / 'clip_candidates.json').write_text(json.dumps({'source': source.name, 'duration': 5, 'clips': [clip]}))
-(folder / 'camera_motion.json').write_text('{}')
-(folder / 'composition_analysis.json').write_text('{}')
+(folder / 'camera_motion.json').write_text(json.dumps({'filename': source.name}))
+(folder / 'composition_analysis.json').write_text(json.dumps({'filename': source.name}))
 (folder / 'ai').mkdir(exist_ok=True)
 (folder / 'stock_metadata').mkdir(exist_ok=True)
 (folder / 'ai' / 'auto_01.json').write_text(json.dumps({'clip': clip, 'analysis': 'valid analysis'}))
@@ -42,12 +43,18 @@ class BatchResumeIntegrationTests(unittest.TestCase):
             for name in ("a.MP4", "b.MP4"):
                 (originals / name).write_bytes(b"immutable " + name.encode())
             before = {p.name: p.read_bytes() for p in originals.iterdir()}
-            (root / "run_pipeline.py").write_text(PIPELINE)
-            env = dict(os.environ, HOME=str(home))
+            # Copy only executable code into an isolated repository for the fake pipeline.
+            import shutil
+            repo = home / "checkout"
+            repo.mkdir()
+            for name in ("run_batch.py", "workspace_paths.py"):
+                shutil.copy2(ROOT / name, repo / name)
+            (repo / "run_pipeline.py").write_text(PIPELINE)
+            env = dict(os.environ, HOME=str(home), DJI_STOCK_ROOT=str(root))
 
             def batch():
                 return subprocess.run(
-                    [sys.executable, str(ROOT / "run_batch.py")],
+                    [sys.executable, str(repo / "run_batch.py")],
                     env=env, cwd=ROOT, capture_output=True, text=True, timeout=120,
                 )
 

@@ -28,7 +28,7 @@ See [setup](docs/setup.md) for prerequisites, Ollama models, and verified vs. un
 ./scripts/start-review.sh
 ```
 
-The application uses `~/DroneStock` as its data workspace and `~/DroneStock/dji-stock-review` as its Git repository. Data paths are currently hardcoded; relocation support is planned.
+The application uses `~/workspace/DroneStock` as its data workspace and `~/workspace/DroneStock/dji-stock-review` as its Git repository. The default data root is the repository’s parent directory; set `DJI_STOCK_ROOT` to an absolute path for a separate workspace. Script execution is relative to the repository, independent of the current working directory.
 
 ## Platform status
 
@@ -41,7 +41,7 @@ No original videos, generated metadata, exports, or model weights are included i
 
 The Git repository is located inside the DroneStock workspace:
 
-    ~/DroneStock/
+    ~/workspace/DroneStock/
       dji-stock-review/   Git repository and application
       originals/          Original DJI footage
       metadata/           Analysis and manual reviews

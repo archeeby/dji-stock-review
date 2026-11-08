@@ -2,6 +2,7 @@
 
 Existing resolve(video) API and metadata/location_cache.json format are preserved.
 """
+from workspace_paths import data_root
 import json
 import subprocess
 import sys
@@ -10,7 +11,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 CACHE = ROOT / "metadata" / "location_cache.json"
 DETAILS_CACHE = ROOT / "metadata" / "location_details_cache.json"
 BASE_URL = "https://nominatim.openstreetmap.org/reverse"

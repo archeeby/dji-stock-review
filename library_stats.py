@@ -1,9 +1,10 @@
+from workspace_paths import data_root
 import csv
 import json
 from pathlib import Path
 from candidate_reviews import key_for, get_review, review_status
 
-ROOT = Path.home() / "DroneStock"
+ROOT = data_root()
 WORK = ROOT / "metadata" / "videos"
 EXPORTS = ROOT / "exports" / "approved"
 

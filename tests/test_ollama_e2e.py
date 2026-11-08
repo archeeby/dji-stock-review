@@ -1,5 +1,4 @@
 """Opt-in real Ollama E2E. No mocks, no writes outside disposable HOME."""
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,7 +7,6 @@ import sys
 import tempfile
 import unittest
 import urllib.request
-from unittest.mock import patch
 
 from tests.test_real_dji_motion import FIXTURE, FIXTURE_SHA256, sha256
 
@@ -31,7 +29,12 @@ class RealOllamaE2E(unittest.TestCase):
     def test_real_frame_vision_and_stock_metadata(self):
         self.assertEqual(sha256(FIXTURE), FIXTURE_SHA256)
         with tempfile.TemporaryDirectory(prefix="dji-ollama-e2e-") as tmp:
-            root = Path(tmp)
+            root = Path(tmp) / "relocated workspace" / "DroneStock"
+            root.mkdir(parents=True)
+            originals = root / "originals"
+            originals.mkdir()
+            copied_source = originals / FIXTURE.name
+            copied_source.write_bytes(FIXTURE.read_bytes())
             candidates = root / "clip_candidates.json"
             clip = {"id": "clip_001", "start": 0.0, "end": 5.0, "duration": 5.0}
             candidates.write_text(json.dumps({"source": FIXTURE.name, "duration": 5.0, "clips": [clip]}))
@@ -39,17 +42,18 @@ class RealOllamaE2E(unittest.TestCase):
             metadata_dir = root / "metadata"
             env = os.environ.copy()
             env["HOME"] = str(root)
+            env["DJI_STOCK_ROOT"] = str(root)
             env["TMPDIR"] = str(root)
             def run(script, *args):
                 proc = subprocess.run(
                     [sys.executable, str(ROOT / script), *map(str, args)],
-                    cwd=ROOT, env=env, capture_output=True, text=True, timeout=900,
+                    cwd=root, env=env, capture_output=True, text=True, timeout=900,
                 )
                 self.assertEqual(proc.returncode, 0, f"{script}: {proc.stdout}\n{proc.stderr}")
                 return proc
 
             run("analyze_auto_single_frame_batch.py", candidates, analysis_dir,
-                clip["id"], "--video", FIXTURE)
+                clip["id"], "--video", copied_source)
             vision = json.loads((analysis_dir / "clip_001.json").read_text())
             self.assertEqual(vision["model"], MODELS[0])
             self.assertEqual(vision["source"], FIXTURE.name)
@@ -75,12 +79,7 @@ class RealOllamaE2E(unittest.TestCase):
             self.assertGreaterEqual(len(fields["keywords"]), 8)
             # Continue the same real-model acceptance test through real FFmpeg.
             # Approval is simulated; no human clicks or writes to personal data.
-            import export_approved
             from candidate_reviews import key_for
-            originals = root / "originals"
-            originals.mkdir()
-            copied_source = originals / FIXTURE.name
-            copied_source.write_bytes(FIXTURE.read_bytes())
             work = root / "metadata" / "videos"
             folder = "ollama-e2e"
             workspace = work / folder
@@ -97,10 +96,8 @@ class RealOllamaE2E(unittest.TestCase):
                 review_path.write_text(json.dumps({key: {"status": status}}))
 
             def export():
-                with (patch.object(export_approved, "WORK", work),
-                      patch.object(export_approved, "ORIGINALS", originals),
-                      patch.object(export_approved, "DEST", output_dir)):
-                    export_approved.export(folder)
+                # Use the real CLI/env boundary, including data-root resolution.
+                return run("export_approved.py", folder)
 
             set_status("approved")
             export()
@@ -116,7 +113,12 @@ class RealOllamaE2E(unittest.TestCase):
             self.assertTrue(any(stream.get("codec_name") == "h264"
                                 for stream in video.get("streams", [])))
             original_output = output.read_bytes()
-            export()  # Unchanged approved export is idempotent.
+            export_mtime = output.stat().st_mtime_ns
+            sidecar_before = sidecar.read_bytes()
+            repeat = export()  # Unchanged approved export is idempotent.
+            self.assertIn("SKIP unchanged", repeat.stdout)
+            self.assertEqual(output.stat().st_mtime_ns, export_mtime)
+            self.assertEqual(sidecar.read_bytes(), sidecar_before)
             self.assertEqual(output.read_bytes(), original_output)
             set_status("rejected")
             export()

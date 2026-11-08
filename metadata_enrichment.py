@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Read-only DJI original metadata extraction and cached per-source telemetry."""
+from workspace_paths import data_root
 import argparse
 import json
 import re
@@ -90,7 +91,7 @@ def main():
     video = args.video.expanduser().resolve()
     if not video.is_file():
         parser.error('Video does not exist: ' + str(video))
-    output = args.output or (Path.home() / 'DroneStock' / 'metadata' / 'source_enrichment' / (video.stem + '.json'))
+    output = args.output or (data_root() / 'metadata' / 'source_enrichment' / (video.stem + '.json'))
     if output.exists() and not args.force:
         try:
             cached = json.loads(output.read_text(encoding='utf-8'))

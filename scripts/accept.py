@@ -18,6 +18,8 @@ import tempfile
 
 
 AI_PATHS = (
+    "workspace_paths.py", "scripts/accept.py", "scripts/accept.sh",
+    "scripts/preview.sh", "scripts/start-review.sh", "scripts/structured_tests.py",
     "run_pipeline.py", "run_batch.py", "analyze_auto_single_frame_batch.py",
     "generate_stock_metadata_batch.py", "metadata_enrichment.py",
 )
@@ -73,14 +75,17 @@ def prepare_worktree(repo, pr):
 
 
 def find_python(repo):
-    for path in (repo.parent / ".venv312/bin/python", repo.parent / ".venv/bin/python"):
-        if path.is_file():
-            result = subprocess.run([str(path), "-c",
-                "import sys, streamlit; assert sys.version_info[:2] == (3, 12)"],
-                capture_output=True)
-            if result.returncode == 0:
-                return path
-    raise RuntimeError("Missing Python 3.12 with Streamlit in .venv312 or .venv")
+    workspace = Path(os.environ.get("DJI_STOCK_ROOT", repo.parent)).expanduser()
+    for base in dict.fromkeys((repo.parent, repo, workspace)):
+        for name in (".venv312", ".venv"):
+            path = base / name / "bin/python"
+            if path.is_file():
+                result = subprocess.run([str(path), "-c",
+                    "import sys, streamlit; assert sys.version_info[:2] == (3, 12)"],
+                    capture_output=True)
+                if result.returncode == 0:
+                    return path
+    raise RuntimeError("Missing Python 3.12 with Streamlit in workspace or checkout .venv312/.venv")
 
 
 def prerequisites(profile, worktree):
@@ -109,6 +114,27 @@ def verify_ollama_result(data, returncode):
     tests = data.get("tests", [])
     if len(tests) != 1 or tests[0].get("status") != "passed" or not tests[0].get("id", "").endswith(".test_real_frame_vision_and_stock_metadata"):
         raise RuntimeError("Required real Ollama E2E test not confirmed by structured results")
+
+
+def test_environment(sandbox, *, ai=False):
+    """Isolate runtime data even when the invoking shell points at live data."""
+    env = os.environ.copy()
+    env["HOME"] = str(sandbox)
+    env["DJI_STOCK_ROOT"] = str(sandbox)
+    env["TMPDIR"] = str(sandbox)
+    env.pop("DJI_RUN_OLLAMA_E2E", None)
+    if ai:
+        env["DJI_RUN_OLLAMA_E2E"] = "1"
+    return env
+
+
+def preview_environment(repo, sha):
+    """Carry the main checkout's data root into a detached PR worktree."""
+    env = os.environ.copy()
+    env["DJI_STOCK_REPO"] = str(repo)
+    env["DJI_STOCK_ROOT"] = os.environ.get("DJI_STOCK_ROOT", str(repo.parent))
+    env["DJI_EXPECTED_PR_SHA"] = sha
+    return env
 
 
 def run_visible(args, *, cwd, env, log_path, timeout, label):
@@ -255,12 +281,10 @@ def execute(pr, repo):
             report["notes"].append("Documentation-only PR; GitHub Actions CI remains mandatory")
         else:
             args = [str(python), str(worktree / "scripts/structured_tests.py"), "--suite", "discovery", "--json", str(report_dir / "tests.json")]
-            # Redirect Path.home() and temp writes away from ~/DroneStock during tests.
+            # Redirect home, data-root and temporary writes into disposable directories.
             # This is filesystem path isolation, not an OS-level security sandbox.
             with tempfile.TemporaryDirectory(prefix="dji-accept-home-") as sandbox:
-                env = os.environ.copy()
-                env["HOME"] = sandbox
-                env["TMPDIR"] = sandbox
+                env = test_environment(sandbox)
                 code = run_visible(
                     args, cwd=worktree, env=env, log_path=log_path,
                     timeout=1800, label="Unit + real DJI integration",
@@ -274,8 +298,7 @@ def execute(pr, repo):
                     report["checks"]["unittest_discovery"]["status"] = "failed"
                     raise RuntimeError(f"Local tests failed (exit {code}); see {log_path}")
                 if profile == "ai":
-                    ai_env = env.copy()
-                    ai_env["DJI_RUN_OLLAMA_E2E"] = "1"
+                    ai_env = test_environment(sandbox, ai=True)
                     ai_log_path = report_dir / "ollama-e2e.log"
                     code = run_visible(
                         [str(python), str(worktree / "scripts/structured_tests.py"), "--suite", "ollama", "--json", str(report_dir / "ollama-e2e.json")],
@@ -320,9 +343,8 @@ def execute(pr, repo):
         print(report["error"], file=sys.stderr)
         return 1
     print("Tests passed. Launching Streamlit; UI acceptance remains manual.")
-    print("WARNING: Streamlit preview SHARES ~/DroneStock runtime data. Avoid modifying real records.")
-    preview_env = os.environ.copy()
-    preview_env["DJI_EXPECTED_PR_SHA"] = sha
+    print("WARNING: Streamlit preview SHARES the configured workspace runtime data. Avoid modifying real records.")
+    preview_env = preview_environment(repo, sha)
     preview_exit = subprocess.call(["bash", str(worktree / "scripts/preview.sh"), str(pr)], cwd=worktree, env=preview_env)
     report["checks"]["streamlit_preview"] = {"status": "launched" if preview_exit == 0 else "blocked", "reason": "Human UI approval remains pending" if preview_exit == 0 else f"Preview exited with status {preview_exit}"}
     if preview_exit:
@@ -337,9 +359,9 @@ def main():
     args = parser.parse_args()
     if args.pr <= 0:
         parser.error("PR number must be positive")
-    repo = Path.home() / "DroneStock" / "dji-stock-review"
+    repo = Path(os.environ.get("DJI_STOCK_REPO", Path(__file__).resolve().parents[1])).resolve()
     if not (repo / ".git").exists():
-        parser.error("Main checkout not found at ~/DroneStock/dji-stock-review")
+        parser.error("Main checkout not found; set DJI_STOCK_REPO")
     return execute(args.pr, repo)
 
 
